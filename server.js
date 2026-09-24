@@ -108,7 +108,7 @@ async function callClaude(messages, maxTokens) {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages, temperature: 0.8 })
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages })
   });
   if (!r.ok) {
     const text = await r.text().catch(() => "");

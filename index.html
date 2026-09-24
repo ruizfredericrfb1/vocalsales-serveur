@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VocalSales — Simulateur de vente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
+    --accent: #1f6f5c; --accent-ink: #ffffff; --client: #e3ebe8; --seller: #1f6f5c; --seller-ink: #ffffff;
+    --ok: #1d7a3e; --ko: #b3261e; --line: #cfdad6; --rec: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
+      --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
+      --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
+    --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
+    --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+    font-size: 18px; line-height: 1.5;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 48px; }
+  h1 { font-size: 1.8rem; margin: 0; }
+  .tagline { color: var(--muted); margin: 4px 0 24px; }
+  .hidden { display: none !important; }
+
+  .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
+  .group-title:first-of-type { margin-top: 0; }
+  .group-hint { color: var(--muted); margin: -6px 0 12px; font-size: .95rem; }
+
+  .scenarios { display: grid; gap: 12px; }
+  .scenario {
+    text-align: left; background: var(--card); color: var(--ink);
+    border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px;
+    font: inherit; cursor: pointer; display: grid; gap: 4px;
+  }
+  .scenario:hover, .scenario:focus-visible { border-color: var(--accent); outline: none; }
+  .scenario strong { font-size: 1.1rem; }
+  .scenario span { color: var(--muted); font-size: .95rem; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; display: grid; gap: 12px;
+  }
+  label { font-weight: 700; }
+  select, input[type="text"] {
+    font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line);
+    background: var(--card); color: var(--ink);
+  }
+  input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
+
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: .92rem; margin-bottom: 10px; }
+  .quota { font-weight: 700; }
+  .quota.low { color: var(--ko); }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .bar h2 { font-size: 1.15rem; margin: 0; }
+  .chat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; height: min(52vh, 460px); overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; }
+  .msg small { display: block; font-size: .78rem; opacity: .75; margin-bottom: 2px; font-weight: 700; }
+  .msg.client { background: var(--client); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.seller { background: var(--seller); color: var(--seller-ink); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.note { align-self: center; background: transparent; color: var(--muted); font-style: italic; font-size: .95rem; }
+
+  .status { min-height: 1.6em; margin: 10px 2px; color: var(--muted); font-weight: 700; }
+  .status.err { color: var(--ko); }
+
+  .reply { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: stretch; }
+  textarea {
+    font: inherit; resize: none; min-height: 56px; padding: 12px 14px;
+    border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--ink);
+  }
+  textarea:focus-visible { outline: none; border-color: var(--accent); }
+  button {
+    font: inherit; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer;
+    padding: 12px 18px; background: var(--accent); color: var(--accent-ink);
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  #micBtn { min-width: 64px; font-size: 1.4rem; }
+  #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .65; } }
+  @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+  .debrief {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; white-space: pre-wrap;
+  }
+  @media (max-width: 560px) {
+    .reply { grid-template-columns: auto 1fr; }
+    #sendBtn { grid-column: 1 / -1; }
+    .msg { max-width: 92%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>VocalSales</h1>
+  <p class="tagline">Entraînement à la vente et préparation aux oraux d'examen, face à une IA.</p>
+
+  <!-- Écran 0 : connexion -->
+  <section id="screenLogin">
+    <div class="card">
+      <label for="codeInput">Votre code de connexion</label>
+      <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
+      <div id="loginError" class="status err"></div>
+      <div class="actions" style="margin-top:0;">
+        <button id="loginBtn">Se connecter</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <span id="whoami"></span>
+      <span class="quota" id="quota"></span>
+    </div>
+
+    <!-- Écran 1 : choix du mode / scénario -->
+    <section id="screenSetup">
+      <h2 class="group-title">S'entraîner à la vente</h2>
+      <p class="group-hint">Le client parlera en premier : répondez au micro ou au clavier.</p>
+      <div class="scenarios" id="scenarioListVente"></div>
+
+      <h2 class="group-title">Se préparer à un oral d'examen</h2>
+      <p class="group-hint">Un jury vous interroge sur une situation de vente que vous avez préparée.</p>
+      <div class="scenarios" id="scenarioListExamen"></div>
+    </section>
+
+    <!-- Écran 1bis : préparation de l'oral d'examen -->
+    <section id="screenPrep" class="hidden">
+      <div class="card">
+        <h2 style="margin:0;">Avant l'oral</h2>
+        <p style="margin:0; color:var(--muted);">Décrivez en quelques lignes la situation de vente que vous allez présenter au jury : le produit ou service, le client, le contexte, ce que vous avez proposé.</p>
+        <textarea id="prepText" rows="5" placeholder="Ex : Lors de mon PFMP chez [enseigne], j'ai accueilli un client qui cherchait… Je lui ai proposé… "></textarea>
+        <label for="prepGender" style="font-weight:400; color:var(--muted);">Voix du jury</label>
+        <select id="prepGender">
+          <option value="female">Une examinatrice</option>
+          <option value="male">Un examinateur</option>
+        </select>
+        <div class="actions" style="margin-top:0;">
+          <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
+          <button class="secondary" id="prepBackBtn">Retour</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Écran 2 : la vente / l'oral -->
+    <section id="screenChat" class="hidden">
+      <div class="bar">
+        <h2 id="scenarioTitle"></h2>
+        <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique">🔁 Réécouter</button>
+      </div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <div class="status" id="status"></div>
+      <div class="reply">
+        <button id="micBtn" title="Répondre au micro" aria-label="Répondre au micro">🎙️</button>
+        <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
+        <button id="sendBtn">Envoyer</button>
+      </div>
+      <div class="actions">
+        <button id="endBtn">Terminer et voir mon évaluation</button>
+        <button class="secondary" id="quitBtn">Changer de situation</button>
+      </div>
+    </section>
+
+    <!-- Écran 3 : l'évaluation -->
+    <section id="screenDebrief" class="hidden">
+      <h2>Votre évaluation</h2>
+      <div class="debrief" id="debrief">Analyse en cours…</div>
+      <div class="actions">
+        <button id="againBtn">Recommencer</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ---------- Connexion élève ---------- */
+let studentCode = null;
+
+async function apiStatus(code) {
+  const r = await fetch("/api/status?code=" + encodeURIComponent(code));
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || "Code invalide."); }
+  return r.json();
+}
+
+function renderQuota(s) {
+  const el = document.getElementById("quota");
+  el.textContent = "Temps restant cette semaine : " + s.minutesRestantes + " min / " + s.minutesLimite + " min";
+  el.classList.toggle("low", s.minutesRestantes <= 10);
+}
+
+document.getElementById("loginBtn").onclick = async () => {
+  const code = document.getElementById("codeInput").value.trim();
+  const err = document.getElementById("loginError");
+  err.textContent = "";
+  if (!code) return;
+  try {
+    const s = await apiStatus(code);
+    studentCode = code;
+    document.getElementById("whoami").textContent = "Connecté(e) : " + s.nom;
+    renderQuota(s);
+    document.getElementById("screenLogin").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+  } catch (e) {
+    err.textContent = e.message || "Connexion impossible.";
+  }
+};
+document.getElementById("codeInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("loginBtn").click();
+});
+
+/* ---------- Scénarios de négociation ---------- */
+const SALES_SCENARIOS = [
+  {
+    id: "casque", type: "vente", title: "Le casque audio",
+    summary: "Magasin d'électronique. Un client exigeant cherche un casque pour le métro.",
+    aiLabel: "Client", gender: "male",
+    opening: "Bonjour. Je cherche un bon casque audio pour mes trajets quotidiens dans le métro. Vous me conseillez quel modèle ?",
+    persona: "Tu es Karim, 34 ans, cadre, client dans un magasin d'électronique à Marseille. Tu prends le métro 1 h par jour. Budget réel : 150 € maximum, mais tu ne le dis que si le vendeur te pose la question. Tu as vu des casques moins chers sur internet et tu hésites. Tes objections possibles : le prix, l'autonomie de la batterie, le confort sur la durée, la comparaison avec internet. Tu es exigeant mais correct."
+  },
+  {
+    id: "running", type: "vente", title: "Les chaussures de running",
+    summary: "Magasin de sport. Une cliente débutante hésite et connaît mal le produit.",
+    aiLabel: "Client", gender: "female",
+    opening: "Bonjour… Je voudrais commencer à courir, mais je ne sais pas du tout quelles chaussures prendre.",
+    persona: "Tu es Sophie, 45 ans, cliente dans un magasin de sport. Tu veux te mettre à la course à pied deux fois par semaine, sur route. Tu n'y connais rien, tu as peur de te faire mal aux genoux et de dépenser pour rien si tu abandonnes. Budget : 80 à 100 €. Tu es hésitante et tu poses des questions simples."
+  },
+  {
+    id: "reclamation", type: "vente", title: "La réclamation",
+    summary: "Service client. Un client mécontent : sa commande a une semaine de retard.",
+    aiLabel: "Client", gender: "male",
+    opening: "Oui bonjour, alors je vous appelle parce que ça fait une semaine que j'attends ma commande, et personne n'est capable de me dire où elle est !",
+    persona: "Tu es Monsieur Lopez, 58 ans. Tu as commandé un canapé en ligne, livraison prévue il y a 7 jours, toujours rien. Tu as déjà appelé deux fois sans réponse claire. Tu es énervé au début, mais tu te calmes si le conseiller t'écoute vraiment, reformule ton problème et te propose une solution concrète. Si on te répond de façon vague ou qu'on te coupe, tu t'énerves davantage et tu menaces d'annuler."
+  }
+];
+const EXAM_TEMPLATES = [
+  { id: "oral-ccf", type: "examen", title: "Oral d'examen — présentation d'une situation de vente",
+    summary: "Vous présentez un cas préparé (PFMP, dossier) ; le jury vous interroge dessus.", aiLabel: "Le jury" }
+];
+
+function buildExamScenario(template, caseDescription, gender) {
+  return {
+    id: template.id, type: "examen", title: template.title, aiLabel: template.aiLabel,
+    gender: gender || "female", caseDescription: caseDescription.trim(),
+    opening: "Bonjour, installez-vous. Vous disposez de quelques minutes pour nous présenter la situation de vente que vous avez préparée. Je vous écoute."
+  };
+}
+
+function RULES(s) {
+  if (s.type === "examen") {
+    return `Tu joues le rôle d'un membre du jury d'un examen oral pour un diplôme de commerce et de vente (Bac Pro Métiers du commerce et de la vente, ou BTS NDRC/MCO), en France.
+
+LE DOSSIER DE L'ÉLÈVE (tel qu'il te l'a décrit avant l'oral) :
+${s.caseDescription || "(non précisé)"}
+
+RÈGLES :
+- Tu es UNIQUEMENT l'examinateur. Ne donne jamais la réponse, ne sors jamais du rôle.
+- Tu parles à l'oral : phrases courtes et naturelles, 1 à 2 questions maximum par réplique.
+- Laisse d'abord l'élève terminer sa présentation avant de poser des questions, sauf s'il te sollicite.
+- Pose ensuite des questions précises de jury, en t'appuyant sur SON dossier : demande des précisions, challenge ses choix, teste sa maîtrise du sujet et sa réactivité — sans être hostile ni condescendant.
+- Reste professionnel, exigeant mais bienveillant, comme un vrai examinateur.
+- L'oral se termine après plusieurs échanges (au moins 4 à 6 questions), quand tu estimes avoir suffisamment évalué le candidat.
+
+FORMAT DE RÉPONSE : uniquement un objet JSON, sans autre texte :
+{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}
+
+Ta première réplique a déjà été dite : "${s.opening}"
+Le candidat va maintenant te répondre.`;
+  }
+  return `Tu joues un rôle dans un simulateur d'entraînement à la vente pour des élèves de lycée professionnel (Bac Pro commerce / relation client).
+
+TON PERSONNAGE :
+${s.persona}
+
+RÈGLES :
+- Tu es UNIQUEMENT le client. Ne donne jamais de conseil de vente, ne sors jamais du rôle.
+- Tu parles à l'oral : phrases courtes et naturelles, 1 à 3 phrases maximum par réplique.
+- Ne cède pas trop vite : un bon vendeur doit te poser des questions, t'écouter, argumenter et traiter tes objections.
+- Si le vendeur est maladroit, impoli ou hors sujet, réagis comme un vrai client (agacement, hésitation, départ).
+- La vente se termine quand tu décides clairement d'acheter (ou d'accepter la solution), ou de partir.
+
+FORMAT DE RÉPONSE : uniquement un objet JSON, sans autre texte :
+{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu" | "parti"}
+
+Ta première réplique a déjà été dite : "${s.opening}"
+Le vendeur va maintenant te répondre.`;
+}
+
+/* ---------- Éléments ---------- */
+const $ = (id) => document.getElementById(id);
+const screens = { setup: $("screenSetup"), prep: $("screenPrep"), chat: $("screenChat"), debrief: $("screenDebrief") };
+function showScreen(name) {
+  for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
+  window.scrollTo(0, 0);
+}
+
+let scenario = null;
+let turns = [];
+let busy = false;
+let finished = false;
+let lastClientLine = "";
+
+/* ---------- Voix (synthèse du navigateur, gratuite) ---------- */
+let voicesReady = new Promise(resolve => {
+  if (!("speechSynthesis" in window)) return resolve();
+  if (speechSynthesis.getVoices().length) return resolve();
+  speechSynthesis.onvoiceschanged = () => resolve();
+  setTimeout(resolve, 2500);
+});
+const FEMALE = /denise|vivienne|eloise|brigitte|coralie|jacqueline|yvette|julie|hortense|charline|sylvie|ariane|amelie|am[ée]lie|marie|léa|lea/i;
+const MALE = /henri|remy|rémy|alain|claude|jerome|jérôme|maurice|yves|gerard|gérard|fabrice|paul|thomas|antoine|guillaume/i;
+function pickVoice(gender) {
+  const all = speechSynthesis.getVoices().filter(v => (v.lang || "").toLowerCase().startsWith("fr"));
+  const natural = all.filter(v => /natural|online|neural/i.test(v.name));
+  const pool = natural.length ? natural : all;
+  const fr = pool.filter(v => /fr-fr/i.test(v.lang));
+  const base = fr.length ? fr : pool;
+  const re = gender === "female" ? FEMALE : MALE;
+  return base.find(v => re.test(v.name)) || base[0] || null;
+}
+function speak(text) {
+  return new Promise(resolve => {
+    if (!("speechSynthesis" in window)) return resolve();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice(scenario.gender);
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "fr-FR"; }
+    u.rate = 1.02;
+    u.onend = resolve; u.onerror = resolve;
+    speechSynthesis.speak(u);
+  });
+}
+
+/* ---------- Affichage ---------- */
+function addMsg(kind, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + kind;
+  if (kind !== "note") {
+    const who = document.createElement("small");
+    who.textContent = kind === "client" ? scenario.aiLabel : "Vous";
+    div.appendChild(who);
+  }
+  div.appendChild(document.createTextNode(text));
+  $("chat").appendChild(div);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+function setStatus(text, isError) {
+  $("status").textContent = text || "";
+  $("status").classList.toggle("err", !!isError);
+}
+function setBusy(b) {
+  busy = b;
+  $("sendBtn").disabled = b || finished;
+  $("micBtn").disabled = b || finished || !recognition;
+  $("input").disabled = b || finished;
+}
+
+/* ---------- Appels au serveur (clé API cachée côté serveur) ---------- */
+function errorText(err) {
+  const code = err && err.code;
+  return ({
+    code_invalide: "Session expirée. Rechargez la page et reconnectez-vous.",
+    quota_depasse: "Temps hebdomadaire épuisé. Réessayez la semaine prochaine.",
+    no_api_key: "Le serveur n'est pas encore configuré (clé API manquante). Prévenez votre professeur.",
+    anthropic_error: "Le service est momentanément indisponible. Réessayez dans un instant.",
+    reponse_invalide: "Réponse inattendue. Renvoyez votre phrase.",
+    requete_invalide: "Une information manquait. Renvoyez votre phrase.",
+  })[code] || "Une erreur est survenue. Réessayez dans un instant.";
+}
+
+async function apiTurn(messages) {
+  const r = await fetch("/api/turn", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: studentCode, messages })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
+  return data; // {replique, etat}
+}
+async function apiEvaluate(prompt) {
+  const r = await fetch("/api/evaluate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: studentCode, prompt })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
+  return data.text;
+}
+async function refreshQuota() {
+  try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
+}
+
+async function sellerSays(text) {
+  text = text.trim();
+  if (!text || busy || finished) return;
+
+  speechSynthesis.cancel();
+  addMsg("seller", text);
+  turns.push({ role: "user", content: text });
+  $("input").value = "";
+  setBusy(true);
+  setStatus(scenario.type === "examen" ? "⏳ Le jury réfléchit…" : "⏳ Le client réfléchit…");
+
+  try {
+    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
+    const res = await apiTurn(messages);
+    const line = String(res.replique || "").trim();
+    const etat = res.etat || "en_cours";
+    if (!line) throw { code: "reponse_invalide" };
+
+    turns.push({ role: "assistant", content: line });
+    lastClientLine = line;
+    addMsg("client", line);
+    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setBusy(false);
+    refreshQuota();
+    if (etat === "conclu" || etat === "parti") { finished = true; setBusy(false); }
+    await speak(line);
+    if (finished) {
+      addMsg("note", scenario.type === "examen" ? "L'oral est terminé."
+        : (etat === "conclu" ? "Le client a pris sa décision : vente conclue." : "Le client est parti sans acheter."));
+      setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
+    } else {
+      setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+    }
+  } catch (e) {
+    turns.pop();
+    $("input").value = text;
+    $("chat").lastChild && $("chat").lastChild.remove();
+    setBusy(false);
+    setStatus(errorText(e), true);
+  }
+}
+
+async function evaluate() {
+  speechSynthesis.cancel();
+  if (recognition && listening) recognition.stop();
+  showScreen("debrief");
+  const box = $("debrief");
+  const sellerTurns = turns.filter(t => t.role === "user").length;
+  if (sellerTurns < 2) {
+    box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
+    return;
+  }
+  const transcript = [(scenario.aiLabel + " : ") + scenario.opening]
+    .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
+    .join("\n");
+
+  const prompt = scenario.type === "examen" ? `Tu es professeur de vente en lycée professionnel, membre de jury pour les diplômes de commerce et de vente. Évalue l'élève qui passait l'ORAL D'EXAMEN dans cette simulation.
+
+Dossier présenté par l'élève : ${scenario.caseDescription || "(non précisé)"}
+
+Transcription :
+${transcript}
+
+Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+
+NOTE GLOBALE : x/20
+
+CRITÈRES DU JURY
+Maîtrise du dossier présenté : x/4 — une phrase de justification
+Structuration de la présentation : x/4 — une phrase
+Qualité de l'expression orale : x/4 — une phrase
+Pertinence des réponses aux questions : x/4 — une phrase
+Posture professionnelle (assurance, vocabulaire) : x/4 — une phrase
+
+TES POINTS FORTS
+- 2 points précis, en citant tes propres réponses
+
+À AMÉLIORER
+- 2 ou 3 points précis, avec pour chacun une reformulation que tu aurais pu donner
+
+CONSEIL POUR LA PROCHAINE FOIS
+Une seule phrase.` : `Tu es professeur de vente en lycée professionnel (Bac Pro Métiers du commerce et de la vente). Évalue l'élève qui jouait le VENDEUR dans cette simulation.
+
+Situation : ${scenario.title} — ${scenario.summary}
+
+Transcription :
+${transcript}
+
+Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+
+NOTE GLOBALE : x/20
+
+ÉTAPES DE LA VENTE
+Accueil et prise de contact : x/4 — une phrase de justification
+Découverte des besoins : x/4 — une phrase
+Argumentation : x/4 — une phrase
+Traitement des objections : x/4 — une phrase
+Conclusion de la vente : x/4 — une phrase
+
+TES POINTS FORTS
+- 2 points précis, en citant tes propres phrases
+
+À AMÉLIORER
+- 2 ou 3 points précis, avec pour chacun une phrase que tu aurais pu dire à la place
+
+CONSEIL POUR LA PROCHAINE FOIS
+Une seule phrase.`;
+
+  box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
+  try {
+    box.textContent = await apiEvaluate(prompt);
+    refreshQuota();
+  } catch (e) {
+    box.textContent = errorText(e);
+  }
+}
+
+/* ---------- Micro (écoute continue, robuste au bruit de classe) ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+if (SR) {
+  recognition = new SR();
+  recognition.lang = "fr-FR";
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  let finalText = "";
+  let userStopped = false;
+  let autoRestarts = 0;
+  let hadError = false;
+
+  recognition.onstart = () => {
+    listening = true;
+    $("micBtn").classList.add("listening");
+    setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
+  };
+  recognition.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
+      else interim += e.results[i][0].transcript;
+    }
+    $("input").value = (finalText + interim).trim();
+  };
+  recognition.onerror = (e) => {
+    hadError = true;
+    if (e.error === "no-speech") { hadError = false; return; }
+    const msg = {
+      "not-allowed": "Le micro est bloqué. Répondez au clavier.",
+      "service-not-allowed": "Le micro est bloqué. Répondez au clavier.",
+      "audio-capture": "Aucun micro détecté. Répondez au clavier.",
+      "network": "Reconnaissance vocale indisponible. Répondez au clavier."
+    }[e.error];
+    if (msg) { userStopped = true; setStatus(msg, true); }
+  };
+  recognition.onend = () => {
+    listening = false;
+    $("micBtn").classList.remove("listening");
+    if (!userStopped && autoRestarts < 6) {
+      autoRestarts++;
+      try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
+    }
+    autoRestarts = 0;
+    const said = $("input").value.trim();
+    if (said && !hadError) sellerSays(said);
+    hadError = false;
+  };
+
+  $("micBtn").onclick = () => {
+    if (busy || finished) return;
+    if (listening) { userStopped = true; recognition.stop(); return; }
+    speechSynthesis.cancel();
+    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    $("input").value = "";
+    setStatus("");
+    try { recognition.start(); } catch (err) { setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
+  };
+} else {
+  $("micBtn").onclick = () => {};
+}
+
+/* ---------- Démarrage ---------- */
+function renderScenarios() {
+  const listVente = $("scenarioListVente");
+  for (const s of SALES_SCENARIOS) {
+    const b = document.createElement("button");
+    b.className = "scenario";
+    const t = document.createElement("strong"); t.textContent = s.title;
+    const d = document.createElement("span"); d.textContent = s.summary;
+    b.append(t, d);
+    b.onclick = () => start(s);
+    listVente.appendChild(b);
+  }
+  const listExamen = $("scenarioListExamen");
+  for (const tpl of EXAM_TEMPLATES) {
+    const b = document.createElement("button");
+    b.className = "scenario";
+    const t = document.createElement("strong"); t.textContent = tpl.title;
+    const d = document.createElement("span"); d.textContent = tpl.summary;
+    b.append(t, d);
+    b.onclick = () => { pendingTemplate = tpl; $("prepText").value = ""; showScreen("prep"); };
+    listExamen.appendChild(b);
+  }
+}
+let pendingTemplate = null;
+$("prepStartBtn").onclick = () => {
+  const desc = $("prepText").value.trim();
+  if (!desc) { $("prepText").focus(); return; }
+  start(buildExamScenario(pendingTemplate, desc, $("prepGender").value));
+};
+$("prepBackBtn").onclick = () => showScreen("setup");
+
+async function start(s) {
+  scenario = s; turns = []; finished = false; lastClientLine = s.opening;
+  $("chat").innerHTML = "";
+  $("scenarioTitle").textContent = s.title;
+  showScreen("chat");
+  setBusy(false);
+  if (!recognition) $("micBtn").title = "Micro non disponible dans ce navigateur";
+  await voicesReady;
+  addMsg("client", s.opening);
+  setStatus("🔊 " + s.aiLabel + " parle…");
+  await speak(s.opening);
+  if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+  $("input").focus();
+}
+
+$("sendBtn").onclick = () => sellerSays($("input").value);
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
+$("replayBtn").onclick = () => { if (lastClientLine) speak(lastClientLine); };
+$("endBtn").onclick = evaluate;
+$("quitBtn").onclick = () => { speechSynthesis.cancel(); if (listening) recognition.stop(); showScreen("setup"); };
+$("againBtn").onclick = () => showScreen("setup");
+
+renderScenarios();
+</script>
+</body>
+</html>

@@ -88,6 +88,13 @@ app.get("/api/status", requireStudent, (req, res) => {
   });
 });
 
+function extractJson(text) {
+  try { return JSON.parse(text.trim()); } catch { /* continue */ }
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) { try { return JSON.parse(match[0]); } catch { /* continue */ } }
+  return null;
+}
+
 async function callClaude(messages, maxTokens) {
   if (!ANTHROPIC_API_KEY) {
     const err = new Error("no_api_key");
@@ -126,10 +133,9 @@ app.post("/api/turn", requireStudent, async (req, res) => {
   if (!messages || !messages.length) return res.status(400).json({ error: "requete_invalide" });
 
   try {
-    const text = await callClaude(messages, 300);
+    const text = await callClaude(messages, 500);
     consumeQuota(req.studentCode, COST_TURN);
-    let parsed;
-    try { parsed = JSON.parse(text); } catch { parsed = null; }
+    const parsed = extractJson(text);
     if (!parsed || !parsed.replique) return res.status(502).json({ error: "reponse_invalide" });
     res.json(parsed);
   } catch (e) {

@@ -108,7 +108,7 @@ async function callClaude(messages, maxTokens) {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages })
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages, temperature: 0.8 })
   });
   if (!r.ok) {
     const text = await r.text().catch(() => "");
@@ -123,6 +123,39 @@ async function callClaude(messages, maxTokens) {
   return block ? block.text : "";
 }
 
+// Force une réponse qui commence par "{" : on donne le début de la réponse à
+// Claude (préremplissage), ce qui rend le format JSON beaucoup plus fiable
+// qu'une simple consigne "réponds en JSON".
+async function callClaudeJSON(messages, maxTokens) {
+  const primed = [...messages, { role: "assistant", content: "{" }];
+  const text = await callClaude(primed, maxTokens);
+  return "{" + text;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Essaie jusqu'à 3 fois, en silence, avant d'abandonner : un élève en oral
+// d'examen ne doit (presque) jamais voir une erreur technique.
+async function getValidReply(messages, maxTokens, attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const text = await callClaudeJSON(messages, maxTokens);
+      const parsed = extractJson(text);
+      if (parsed && parsed.replique) return parsed;
+      lastErr = { code: "reponse_invalide", raw: text };
+    } catch (e) {
+      lastErr = e;
+      if (e.code === "no_api_key") throw e; // inutile de réessayer sans clé
+    }
+    if (i < attempts - 1) await sleep(400);
+  }
+  console.error("Échec après plusieurs tentatives:", lastErr);
+  const err = new Error(lastErr && lastErr.code || "reponse_invalide");
+  err.code = lastErr && lastErr.code || "reponse_invalide";
+  throw err;
+}
+
 // Un tour de dialogue (négociation ou oral) : renvoie {replique, etat}
 app.post("/api/turn", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
@@ -133,10 +166,8 @@ app.post("/api/turn", requireStudent, async (req, res) => {
   if (!messages || !messages.length) return res.status(400).json({ error: "requete_invalide" });
 
   try {
-    const text = await callClaude(messages, 500);
+    const parsed = await getValidReply(messages, 500);
     consumeQuota(req.studentCode, COST_TURN);
-    const parsed = extractJson(text);
-    if (!parsed || !parsed.replique) return res.status(502).json({ error: "reponse_invalide" });
     res.json(parsed);
   } catch (e) {
     res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });

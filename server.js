@@ -11,9 +11,8 @@ const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
 const WEEKLY_LIMIT_MINUTES = Number(process.env.WEEKLY_LIMIT_MINUTES || 120);
-// Voix Azure (facultatif) : si absent, le navigateur utilise sa propre voix.
-const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY || "";
-const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || "";
+// Voix ElevenLabs (facultatif) : si absent, le navigateur utilise sa propre voix.
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
 // Coût estimé (en minutes de quota) de chaque type d'appel.
 const COST_TURN = 1;
 const COST_EVAL = 3;
@@ -92,59 +91,46 @@ app.get("/api/status", requireStudent, (req, res) => {
 });
 
 /* ---------- Voix Azure (facultatif) ---------- */
-let azureTokenCache = { token: "", expiresAt: 0 };
-
-async function getAzureToken() {
-  if (azureTokenCache.token && Date.now() < azureTokenCache.expiresAt) return azureTokenCache.token;
-  const r = await fetch(`https://${AZURE_SPEECH_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
-    method: "POST",
-    headers: { "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY, "content-length": "0" }
-  });
-  if (!r.ok) throw new Error("azure_token_error");
-  const token = await r.text();
-  azureTokenCache = { token, expiresAt: Date.now() + 9 * 60 * 1000 };
-  return token;
-}
-
-function azureVoice(gender) {
-  return gender === "female" ? "fr-FR-DeniseNeural" : "fr-FR-HenriNeural";
-}
-
-function escapeXml(s) {
-  return String(s).replace(/[<>&'"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
+// Voix par défaut du catalogue ElevenLabs (changeables via variables d'environnement
+// ELEVENLABS_VOICE_MALE / ELEVENLABS_VOICE_FEMALE si vous voulez essayer d'autres voix).
+function elevenLabsVoice(gender) {
+  if (gender === "female") return process.env.ELEVENLABS_VOICE_FEMALE || "21m00Tcm4TlvDq8ikWAM"; // Rachel
+  return process.env.ELEVENLABS_VOICE_MALE || "pNInz6obpgDQGcFmaJgB"; // Adam
 }
 
 app.post("/api/speech", requireStudent, async (req, res) => {
-  if (!AZURE_SPEECH_KEY || !AZURE_SPEECH_REGION) {
-    return res.status(503).json({ error: "azure_non_configure" });
+  if (!ELEVENLABS_API_KEY) {
+    return res.status(503).json({ error: "voix_non_configuree" });
   }
   const text = String(req.body.text || "").trim();
   if (!text) return res.status(400).json({ error: "requete_invalide" });
-  const voice = azureVoice(req.body.gender);
-  const ssml = `<speak version="1.0" xml:lang="fr-FR"><voice name="${voice}">${escapeXml(text)}</voice></speak>`;
+  const voiceId = elevenLabsVoice(req.body.gender);
 
   try {
-    const token = await getAzureToken();
-    const r = await fetch(`https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: "POST",
       headers: {
-        "authorization": "Bearer " + token,
-        "content-type": "application/ssml+xml",
-        "x-microsoft-outputformat": "audio-16khz-64kbitrate-mono-mp3"
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "content-type": "application/json",
+        "accept": "audio/mpeg"
       },
-      body: ssml
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+      })
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
-      console.error("Erreur Azure TTS:", r.status, detail.slice(0, 300));
-      return res.status(502).json({ error: "azure_error" });
+      console.error("Erreur ElevenLabs TTS:", r.status, detail.slice(0, 300));
+      return res.status(502).json({ error: "voix_erreur" });
     }
     const buf = Buffer.from(await r.arrayBuffer());
     res.setHeader("content-type", "audio/mpeg");
     res.send(buf);
   } catch (e) {
-    console.error("Erreur Azure TTS:", e && e.message);
-    res.status(502).json({ error: "azure_error" });
+    console.error("Erreur ElevenLabs TTS:", e && e.message);
+    res.status(502).json({ error: "voix_erreur" });
   }
 });
 

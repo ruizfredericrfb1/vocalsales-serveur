@@ -11,6 +11,9 @@ const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
 const WEEKLY_LIMIT_MINUTES = Number(process.env.WEEKLY_LIMIT_MINUTES || 120);
+// Voix Azure (facultatif) : si absent, le navigateur utilise sa propre voix.
+const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY || "";
+const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || "";
 // Coût estimé (en minutes de quota) de chaque type d'appel.
 const COST_TURN = 1;
 const COST_EVAL = 3;
@@ -86,6 +89,63 @@ app.get("/api/status", requireStudent, (req, res) => {
     minutesLimite: WEEKLY_LIMIT_MINUTES,
     minutesRestantes: Math.max(0, WEEKLY_LIMIT_MINUTES - minutes)
   });
+});
+
+/* ---------- Voix Azure (facultatif) ---------- */
+let azureTokenCache = { token: "", expiresAt: 0 };
+
+async function getAzureToken() {
+  if (azureTokenCache.token && Date.now() < azureTokenCache.expiresAt) return azureTokenCache.token;
+  const r = await fetch(`https://${AZURE_SPEECH_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
+    method: "POST",
+    headers: { "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY, "content-length": "0" }
+  });
+  if (!r.ok) throw new Error("azure_token_error");
+  const token = await r.text();
+  azureTokenCache = { token, expiresAt: Date.now() + 9 * 60 * 1000 };
+  return token;
+}
+
+function azureVoice(gender) {
+  return gender === "female" ? "fr-FR-DeniseNeural" : "fr-FR-HenriNeural";
+}
+
+function escapeXml(s) {
+  return String(s).replace(/[<>&'"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]));
+}
+
+app.post("/api/speech", requireStudent, async (req, res) => {
+  if (!AZURE_SPEECH_KEY || !AZURE_SPEECH_REGION) {
+    return res.status(503).json({ error: "azure_non_configure" });
+  }
+  const text = String(req.body.text || "").trim();
+  if (!text) return res.status(400).json({ error: "requete_invalide" });
+  const voice = azureVoice(req.body.gender);
+  const ssml = `<speak version="1.0" xml:lang="fr-FR"><voice name="${voice}">${escapeXml(text)}</voice></speak>`;
+
+  try {
+    const token = await getAzureToken();
+    const r = await fetch(`https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method: "POST",
+      headers: {
+        "authorization": "Bearer " + token,
+        "content-type": "application/ssml+xml",
+        "x-microsoft-outputformat": "audio-16khz-64kbitrate-mono-mp3"
+      },
+      body: ssml
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      console.error("Erreur Azure TTS:", r.status, detail.slice(0, 300));
+      return res.status(502).json({ error: "azure_error" });
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.setHeader("content-type", "audio/mpeg");
+    res.send(buf);
+  } catch (e) {
+    console.error("Erreur Azure TTS:", e && e.message);
+    res.status(502).json({ error: "azure_error" });
+  }
 });
 
 function extractJson(text) {

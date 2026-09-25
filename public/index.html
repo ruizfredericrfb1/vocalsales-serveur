@@ -327,7 +327,7 @@ let busy = false;
 let finished = false;
 let lastClientLine = "";
 
-/* ---------- Voix (synthèse du navigateur, gratuite) ---------- */
+/* ---------- Voix : Azure en priorité, navigateur en secours automatique ---------- */
 let voicesReady = new Promise(resolve => {
   if (!("speechSynthesis" in window)) return resolve();
   if (speechSynthesis.getVoices().length) return resolve();
@@ -345,7 +345,11 @@ function pickVoice(gender) {
   const re = gender === "female" ? FEMALE : MALE;
   return base.find(v => re.test(v.name)) || base[0] || null;
 }
-function speak(text) {
+
+let currentAudio = null;
+let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
+
+function speakBrowser(text) {
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) return resolve();
     speechSynthesis.cancel();
@@ -356,6 +360,37 @@ function speak(text) {
     u.onend = resolve; u.onerror = resolve;
     speechSynthesis.speak(u);
   });
+}
+
+async function speak(text) {
+  stopSpeaking();
+  if (!azureUnavailable) {
+    try {
+      const r = await fetch("/api/speech", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: studentCode, text, gender: scenario.gender })
+      });
+      if (!r.ok) throw new Error("azure_indisponible");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      currentAudio = new Audio(url);
+      await new Promise(resolve => {
+        currentAudio.onended = resolve;
+        currentAudio.onerror = resolve;
+        currentAudio.play().catch(resolve);
+      });
+      URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
+    }
+  }
+  await speakBrowser(text);
+}
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
 }
 
 /* ---------- Affichage ---------- */
@@ -421,7 +456,7 @@ async function sellerSays(text) {
   text = text.trim();
   if (!text || busy || finished) return;
 
-  speechSynthesis.cancel();
+  stopSpeaking();
   addMsg("seller", text);
   turns.push({ role: "user", content: text });
   $("input").value = "";
@@ -460,7 +495,7 @@ async function sellerSays(text) {
 }
 
 async function evaluate() {
-  speechSynthesis.cancel();
+  stopSpeaking();
   if (recognition && listening) recognition.stop();
   showScreen("debrief");
   const box = $("debrief");
@@ -588,7 +623,7 @@ if (SR) {
   $("micBtn").onclick = () => {
     if (busy || finished) return;
     if (listening) { userStopped = true; recognition.stop(); return; }
-    speechSynthesis.cancel();
+    stopSpeaking();
     finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
     $("input").value = "";
     setStatus("");
@@ -648,7 +683,7 @@ $("sendBtn").onclick = () => sellerSays($("input").value);
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
 $("replayBtn").onclick = () => { if (lastClientLine) speak(lastClientLine); };
 $("endBtn").onclick = evaluate;
-$("quitBtn").onclick = () => { speechSynthesis.cancel(); if (listening) recognition.stop(); showScreen("setup"); };
+$("quitBtn").onclick = () => { stopSpeaking(); if (listening) recognition.stop(); showScreen("setup"); };
 $("againBtn").onclick = () => showScreen("setup");
 
 renderScenarios();

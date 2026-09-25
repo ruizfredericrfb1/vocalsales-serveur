@@ -123,13 +123,11 @@ async function callClaude(messages, maxTokens) {
   return block ? block.text : "";
 }
 
-// Force une réponse qui commence par "{" : on donne le début de la réponse à
-// Claude (préremplissage), ce qui rend le format JSON beaucoup plus fiable
-// qu'une simple consigne "réponds en JSON".
+// Remarque : le préremplissage de réponse ("assistant" en fin de liste) n'est
+// pas supporté par ce modèle (Claude Sonnet 5) — on s'appuie donc uniquement
+// sur la consigne stricte du prompt et sur l'extraction tolérante ci-dessus.
 async function callClaudeJSON(messages, maxTokens) {
-  const primed = [...messages, { role: "assistant", content: "{" }];
-  const text = await callClaude(primed, maxTokens);
-  return "{" + text;
+  return await callClaude(messages, maxTokens);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

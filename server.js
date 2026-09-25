@@ -149,6 +149,15 @@ async function getValidReply(messages, maxTokens, attempts = 3) {
     if (i < attempts - 1) await sleep(400);
   }
   console.error("Échec après plusieurs tentatives:", lastErr);
+
+  // Filet de sécurité : si Claude a quand même écrit une réplique plausible
+  // (juste sans l'emballage JSON demandé), on l'utilise plutôt que de bloquer
+  // l'élève avec une erreur — mieux vaut une réplique sans étiquette d'état
+  // qu'un écran d'erreur en pleine conversation.
+  const raw = lastErr && typeof lastErr.raw === "string" ? lastErr.raw.trim() : "";
+  const looksUsable = raw.length > 0 && raw.length < 600 && !raw.startsWith("{") && !/^\s*<|^\s*```/.test(raw);
+  if (looksUsable) return { replique: raw, etat: "en_cours" };
+
   const err = new Error(lastErr && lastErr.code || "reponse_invalide");
   err.code = lastErr && lastErr.code || "reponse_invalide";
   throw err;

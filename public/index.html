@@ -163,10 +163,16 @@
       <div class="card">
         <h2 id="prepTitle" style="margin:0;">Avant l'oral</h2>
         <p style="margin:0; color:var(--muted);">Vous allez d'abord <strong>présenter votre situation pendant 10 minutes maximum, sans interruption du jury</strong> — exactement comme le jour de l'épreuve. L'entretien avec le jury suivra ensuite, à partir de ce que vous aurez présenté.</p>
-        <label for="prepGender" style="font-weight:400; color:var(--muted);">Voix du jury</label>
-        <select id="prepGender">
-          <option value="female">Une examinatrice</option>
-          <option value="male">Un examinateur</option>
+        <p style="margin:0; color:var(--muted); font-size:.92rem;">Le jury est composé de deux personnes, comme le jour de l'examen : votre professeur(e) d'économie-gestion, et un(e) professionnel(le) du secteur commerce/vente.</p>
+        <label for="prepGenderProf" style="font-weight:400; color:var(--muted);">Voix du professeur / de la professeure</label>
+        <select id="prepGenderProf">
+          <option value="female">Une professeure</option>
+          <option value="male">Un professeur</option>
+        </select>
+        <label for="prepGenderPro" style="font-weight:400; color:var(--muted);">Voix du professionnel / de la professionnelle</label>
+        <select id="prepGenderPro">
+          <option value="male">Un professionnel</option>
+          <option value="female">Une professionnelle</option>
         </select>
         <div class="actions" style="margin-top:0;">
           <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
@@ -285,17 +291,26 @@ const EXAM_TEMPLATES = [
     summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
 ];
 
-function buildExamScenario(template, gender) {
+function buildExamScenario(template, genderProf, genderPro) {
   return {
     id: template.id, type: "examen", title: template.title, aiLabel: template.aiLabel,
-    gender: gender || "female",
-    opening: "Bonjour, installez-vous. Je vous rappelle le déroulement de cette situation 1 de l'épreuve E33 : vous allez nous présenter votre phase préparatoire à une action de fidélisation de la clientèle, en vous appuyant sur les sources d'information que vous avez mobilisées et sur les deux actions que vous proposez. Vous avez jusqu'à dix minutes pour cela, sans interruption de notre part. Ensuite, nous échangerons avec vous pendant dix minutes sur ce que vous nous aurez présenté. Je vous écoute, quand vous êtes prêt."
+    genderByMembre: { professeur: genderProf || "female", professionnel: genderPro || "male" },
+    openingSegments: [
+      { membre: "professeur", text: "Bonjour, installez-vous. Je suis votre professeure d'économie-gestion, et je siège aujourd'hui avec un professionnel du secteur du commerce pour cette situation 1 de l'épreuve E33." },
+      { membre: "professionnel", text: "Bonjour. De mon côté, je serai surtout attentif à la façon dont vos propositions tiendraient vraiment sur le terrain, dans une entreprise réelle." },
+      { membre: "professeur", text: "Vous allez nous présenter votre phase préparatoire à une action de fidélisation de la clientèle, en vous appuyant sur les sources d'information mobilisées et sur les deux actions que vous proposez. Vous avez jusqu'à dix minutes, sans interruption de notre part. Ensuite, nous échangerons avec vous pendant dix minutes. Je vous écoute, quand vous êtes prêt." }
+    ]
   };
 }
 
 function RULES(s) {
   if (s.type === "examen") {
-    return `Tu joues le rôle du jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
+    return `Tu joues le jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
+
+CE JURY EST COMPOSÉ DE DEUX PERSONNES DISTINCTES, comme le veut le référentiel officiel — tu incarnes les deux, en alternant naturellement selon qui a la question la plus pertinente à poser :
+- LE / LA PROFESSEUR(E) D'ÉCONOMIE-GESTION : se concentre sur la rigueur méthodologique du diagnostic, la structuration de la démarche, le lien avec les notions du programme (sources d'information, SIC, SWOT).
+- LE / LA PROFESSIONNEL(LE) DU SECTEUR COMMERCE/VENTE : se concentre sur le réalisme terrain — est-ce que ça tiendrait vraiment dans une vraie entreprise, la faisabilité concrète des actions proposées, l'expérience pratique du candidat au quotidien.
+Ne fais jamais parler les deux en même temps dans une réplique : chaque réplique est UNE question posée par UN SEUL des deux membres, identifié par le champ "membre" de ta réponse JSON. Alterne entre les deux au fil de l'entretien plutôt que de laisser un seul membre monopoliser la parole, et ne redonne jamais la parole immédiatement au même membre qui vient de parler sauf s'il relance sur une réponse incomplète.
 
 L'ÉLÈVE VIENT DE FAIRE SA PRÉSENTATION ORALE DE 10 MINUTES SANS INTERRUPTION (elle t'a été transmise intégralement dans le premier message ci-dessous, entre crochets). Tu ne l'as pas coupée pendant qu'elle parlait — c'est seulement maintenant que commence l'entretien de 10 minutes.
 
@@ -332,9 +347,9 @@ RÈGLES :
 - Ne fais pas passer "etat" à "conclu" avant d'avoir réellement couvert au moins 3 des 4 points de la grille (au moins 5 à 7 vrais échanges de fond) — jamais à cause d'une seule réponse creuse.
 
 FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
-{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}
+{"replique": "ta réplique à l'oral", "membre": "professeur" | "professionnel", "etat": "en_cours" | "conclu"}
 
-Ta première réplique de bienvenue a déjà été dite : "${s.opening}"`;
+Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSegments.map(seg => `[${seg.membre}] "${seg.text}"`).join(" ")}`;
   }
   return `Tu joues un rôle dans un simulateur d'entraînement à la vente pour des élèves de lycée professionnel (Bac Pro commerce / relation client).
 
@@ -370,6 +385,7 @@ let turns = [];
 let busy = false;
 let finished = false;
 let lastClientLine = "";
+let lastMembre = null;
 
 /* ---------- Voix : Azure en priorité, navigateur en secours automatique ---------- */
 let voicesReady = new Promise(resolve => {
@@ -393,462 +409,5 @@ function pickVoice(gender) {
 let currentAudio = null;
 let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
 
-function speakBrowser(text) {
-  return new Promise(resolve => {
-    if (!("speechSynthesis" in window)) return resolve();
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const v = pickVoice(scenario.gender);
-    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "fr-FR"; }
-    u.rate = 1.02;
-    u.onend = resolve; u.onerror = resolve;
-    speechSynthesis.speak(u);
-  });
-}
-
-async function speak(text) {
-  stopSpeaking();
-  if (!azureUnavailable) {
-    try {
-      const r = await fetch("/api/speech", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: studentCode, text, gender: scenario.gender })
-      });
-      if (!r.ok) throw new Error("azure_indisponible");
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      currentAudio = new Audio(url);
-      await new Promise(resolve => {
-        currentAudio.onended = resolve;
-        currentAudio.onerror = resolve;
-        currentAudio.play().catch(resolve);
-      });
-      URL.revokeObjectURL(url);
-      return;
-    } catch (e) {
-      azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
-    }
-  }
-  await speakBrowser(text);
-}
-
-function stopSpeaking() {
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
-}
-
-/* ---------- Affichage ---------- */
-function addMsg(kind, text) {
-  const div = document.createElement("div");
-  div.className = "msg " + kind;
-  if (kind !== "note") {
-    const who = document.createElement("small");
-    who.textContent = kind === "client" ? scenario.aiLabel : "Vous";
-    div.appendChild(who);
-  }
-  div.appendChild(document.createTextNode(text));
-  $("chat").appendChild(div);
-  $("chat").scrollTop = $("chat").scrollHeight;
-}
-function setStatus(text, isError) {
-  $("status").textContent = text || "";
-  $("status").classList.toggle("err", !!isError);
-}
-function setBusy(b) {
-  busy = b;
-  $("sendBtn").disabled = b || finished;
-  $("micBtn").disabled = b || finished || !recognition;
-  $("input").disabled = b || finished;
-}
-
-/* ---------- Appels au serveur (clé API cachée côté serveur) ---------- */
-function errorText(err) {
-  const code = err && err.code;
-  return ({
-    code_invalide: "Session expirée. Rechargez la page et reconnectez-vous.",
-    quota_depasse: "Temps hebdomadaire épuisé. Réessayez la semaine prochaine.",
-    no_api_key: "Le serveur n'est pas encore configuré (clé API manquante). Prévenez votre professeur.",
-    anthropic_error: "Le service est momentanément indisponible. Réessayez dans un instant.",
-    reponse_invalide: "Réponse inattendue. Renvoyez votre phrase.",
-    requete_invalide: "Une information manquait. Renvoyez votre phrase.",
-  })[code] || "Une erreur est survenue. Réessayez dans un instant.";
-}
-
-async function apiTurn(messages) {
-  const r = await fetch("/api/turn", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, messages })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {replique, etat}
-}
-async function apiEvaluate(prompt) {
-  const r = await fetch("/api/evaluate", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, prompt })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data.text;
-}
-async function refreshQuota() {
-  try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
-}
-
-async function sellerSays(text) {
-  text = text.trim();
-  if (!text || busy || finished) return;
-
-  stopSpeaking();
-  addMsg("seller", text);
-  turns.push({ role: "user", content: text });
-  $("input").value = "";
-  setBusy(true);
-  setStatus(scenario.type === "examen" ? "⏳ Le jury réfléchit…" : "⏳ Le client réfléchit…");
-
-  try {
-    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
-    const res = await apiTurn(messages);
-    const line = String(res.replique || "").trim();
-    const etat = res.etat || "en_cours";
-    if (!line) throw { code: "reponse_invalide" };
-
-    turns.push({ role: "assistant", content: line });
-    lastClientLine = line;
-    addMsg("client", line);
-    setStatus("🔊 " + scenario.aiLabel + " parle…");
-    setBusy(false);
-    refreshQuota();
-    if (etat === "conclu" || etat === "parti") { finished = true; setBusy(false); }
-    await speak(line);
-    if (finished) {
-      addMsg("note", scenario.type === "examen" ? "L'oral est terminé."
-        : (etat === "conclu" ? "Le client a pris sa décision : vente conclue." : "Le client est parti sans acheter."));
-      setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
-    } else {
-      setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
-    }
-  } catch (e) {
-    turns.pop();
-    $("input").value = text;
-    $("chat").lastChild && $("chat").lastChild.remove();
-    setBusy(false);
-    setStatus(errorText(e), true);
-  }
-}
-
-async function evaluate() {
-  stopSpeaking();
-  if (recognition && listening) recognition.stop();
-  showScreen("debrief");
-  const box = $("debrief");
-  const sellerTurns = turns.filter(t => t.role === "user").length;
-  if (sellerTurns < 2) {
-    box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
-    return;
-  }
-  const transcript = [(scenario.aiLabel + " : ") + scenario.opening]
-    .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
-    .join("\n");
-
-  const prompt = scenario.type === "examen" ? `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
-
-Transcription complète (présentation puis entretien) :
-${transcript}
-
-GRILLE OFFICIELLE À APPLIQUER (4 critères, chacun noté sur 5, note globale sur 20) :
-1. Pertinence du choix des sources d'information et qualité du traitement des sollicitations clients.
-2. Pertinence des actions proposées — vérifie explicitement si DEUX actions de FDRC ont été formulées, chacune avec une cible et des objectifs. Une seule action, ou des actions vagues, plafonne ce critère à 2/5 maximum ; aucune action proposée plafonne à 1/5.
-3. Cohérence du choix des outils de fidélisation avec le contexte — le critère le plus exigeant : les actions découlent-elles logiquement du diagnostic présenté (profil clientèle, concurrence, zone de chalandise, SWOT) ? Un diagnostic complet mais déconnecté des actions choisies, ou un diagnostic survolé, plafonne ce critère à 2/5 maximum.
-4. Maîtrise du dossier pendant l'entretien (réactivité, justesse des réponses aux questions du jury, capacité à approfondir chaque partie du diagnostic).
-
-RÈGLES DE NOTATION :
-- N'attribue jamais le maximum sur un critère sans une preuve précise et citable dans la transcription.
-- La moyenne réaliste d'un candidat moyen tourne autour de 10 à 12/20 ; réserve 16 et plus aux prestations qui remplissent véritablement les 4 critères à un niveau expert.
-- Justifie chaque note par un élément concret que l'élève a réellement dit, jamais par une impression générale.
-
-Rédige l'évaluation en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
-
-NOTE GLOBALE : x/20
-
-CRITÈRES DE LA GRILLE E33
-Sources d'information et traitement des sollicitations clients : x/5 — une phrase citant un élément précis
-Pertinence des deux actions de FDRC proposées : x/5 — une phrase précisant si les deux actions ont bien été identifiées
-Cohérence des outils de fidélisation avec le contexte (diagnostic) : x/5 — une phrase précisant si les actions découlent du diagnostic
-Maîtrise du dossier pendant l'entretien : x/5 — une phrase
-
-TES POINTS FORTS
-- 2 points précis, en citant tes propres réponses
-
-À AMÉLIORER
-- 2 ou 3 points précis, avec pour chacun une reformulation que tu aurais pu donner
-
-CONSEIL POUR LA PROCHAINE FOIS
-Une seule phrase.` : `Tu es professeur de vente en lycée professionnel (Bac Pro Métiers du commerce et de la vente). Évalue l'élève qui jouait le VENDEUR dans cette simulation.
-
-Situation : ${scenario.title} — ${scenario.summary}
-
-Transcription :
-${transcript}
-
-Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
-
-NOTE GLOBALE : x/20
-
-ÉTAPES DE LA VENTE
-Accueil et prise de contact : x/4 — une phrase de justification
-Découverte des besoins : x/4 — une phrase
-Argumentation : x/4 — une phrase
-Traitement des objections : x/4 — une phrase
-Conclusion de la vente : x/4 — une phrase
-
-TES POINTS FORTS
-- 2 points précis, en citant tes propres phrases
-
-À AMÉLIORER
-- 2 ou 3 points précis, avec pour chacun une phrase que tu aurais pu dire à la place
-
-CONSEIL POUR LA PROCHAINE FOIS
-Une seule phrase.`;
-
-  box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
-  try {
-    box.textContent = await apiEvaluate(prompt);
-    refreshQuota();
-  } catch (e) {
-    box.textContent = errorText(e);
-  }
-}
-
-/* ---------- Micro (écoute continue, robuste au bruit de classe) ----------
-   Deux modes partagent le même moteur de reconnaissance :
-   - "chat"         : une réplique à la fois (entretien), comme avant.
-   - "presentation" : accumulation longue (jusqu'à 10 minutes), sans jamais
-                      envoyer quoi que ce soit à l'IA — on écrit juste dans
-                      la zone de texte de la présentation. */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-let listening = false;
-let micMode = "chat";
-const MAX_RESTARTS = { chat: 6, presentation: 60 };
-let finalText = "";
-let presBase = "";
-let userStopped = false;
-let autoRestarts = 0;
-let hadError = false;
-if (SR) {
-  recognition = new SR();
-  recognition.lang = "fr-FR";
-  recognition.interimResults = true;
-  recognition.continuous = true;
-
-  recognition.onstart = () => {
-    listening = true;
-    if (micMode === "presentation") {
-      $("presMicBtn").classList.add("listening");
-      $("presStatus").textContent = "🔴 Je vous écoute…";
-    } else {
-      $("micBtn").classList.add("listening");
-      setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
-    }
-  };
-  recognition.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
-      else interim += e.results[i][0].transcript;
-    }
-    if (micMode === "presentation") {
-      $("presTranscript").value = (presBase + finalText + interim).trim();
-    } else {
-      $("input").value = (finalText + interim).trim();
-    }
-  };
-  recognition.onerror = (e) => {
-    hadError = true;
-    if (e.error === "no-speech") { hadError = false; return; }
-    const msg = {
-      "not-allowed": "Le micro est bloqué. Répondez au clavier.",
-      "service-not-allowed": "Le micro est bloqué. Répondez au clavier.",
-      "audio-capture": "Aucun micro détecté. Répondez au clavier.",
-      "network": "Reconnaissance vocale indisponible. Répondez au clavier."
-    }[e.error];
-    if (msg) {
-      userStopped = true;
-      if (micMode === "presentation") $("presStatus").textContent = msg; else setStatus(msg, true);
-    }
-  };
-  recognition.onend = () => {
-    listening = false;
-    $("micBtn").classList.remove("listening");
-    $("presMicBtn") && $("presMicBtn").classList.remove("listening");
-    if (!userStopped && autoRestarts < MAX_RESTARTS[micMode]) {
-      autoRestarts++;
-      try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
-    }
-    autoRestarts = 0;
-    if (micMode === "chat") {
-      const said = $("input").value.trim();
-      if (said && !hadError) sellerSays(said);
-    } else if (micMode === "presentation") {
-      $("presStatus").textContent = "";
-    }
-    hadError = false;
-  };
-
-  $("micBtn").onclick = () => {
-    if (busy || finished) return;
-    if (listening) { userStopped = true; recognition.stop(); return; }
-    stopSpeaking();
-    micMode = "chat";
-    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
-    $("input").value = "";
-    setStatus("");
-    try { recognition.start(); } catch (err) { setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
-  };
-  $("presMicBtn").onclick = () => {
-    if (listening) { userStopped = true; recognition.stop(); return; }
-    micMode = "presentation";
-    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
-    presBase = $("presTranscript").value ? $("presTranscript").value.trim() + " " : "";
-    $("presStatus").textContent = "";
-    try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
-  };
-} else {
-  $("micBtn").onclick = () => {};
-  $("presMicBtn").onclick = () => {};
-  $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
-}
-
-/* ---------- Démarrage ---------- */
-function renderScenarios() {
-  const listVente = $("scenarioListVente");
-  for (const s of SALES_SCENARIOS) {
-    const b = document.createElement("button");
-    b.className = "scenario";
-    const t = document.createElement("strong"); t.textContent = s.title;
-    const d = document.createElement("span"); d.textContent = s.summary;
-    b.append(t, d);
-    b.onclick = () => start(s);
-    listVente.appendChild(b);
-  }
-  const listExamen = $("scenarioListExamen");
-  for (const tpl of EXAM_TEMPLATES) {
-    const b = document.createElement("button");
-    b.className = "scenario";
-    const t = document.createElement("strong"); t.textContent = tpl.title;
-    const d = document.createElement("span"); d.textContent = tpl.summary;
-    b.append(t, d);
-    b.onclick = () => { pendingTemplate = tpl; showScreen("prep"); };
-    listExamen.appendChild(b);
-  }
-}
-let pendingTemplate = null;
-$("prepStartBtn").onclick = () => {
-  start(buildExamScenario(pendingTemplate, $("prepGender").value));
-};
-$("prepBackBtn").onclick = () => showScreen("setup");
-
-/* ---------- Phase 1 : présentation chronométrée (E33), sans intervention du jury ---------- */
-let presTimerId = null;
-let presRemaining = 600;
-let presentationDone = false;
-
-function updatePresTimerDisplay() {
-  const r = Math.max(presRemaining, 0);
-  const m = Math.floor(r / 60), sec = r % 60;
-  $("presTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
-  $("presTimer").classList.toggle("urgent", r <= 60);
-}
-
-function beginPresentationPhase() {
-  presentationDone = false;
-  $("presTranscript").value = "";
-  $("presStatus").textContent = "";
-  presRemaining = 600;
-  updatePresTimerDisplay();
-  showScreen("presentation");
-  clearInterval(presTimerId);
-  presTimerId = setInterval(() => {
-    presRemaining--;
-    updatePresTimerDisplay();
-    if (presRemaining <= 0) finishPresentation();
-  }, 1000);
-}
-
-async function finishPresentation() {
-  if (presentationDone) return;
-  presentationDone = true;
-  clearInterval(presTimerId);
-  if (listening) { userStopped = true; recognition.stop(); }
-
-  const presentationText = $("presTranscript").value.trim();
-  showScreen("chat");
-  $("scenarioTitle").textContent = scenario.title;
-  addMsg("seller", presentationText || "(aucune présentation enregistrée)");
-  setBusy(true);
-  setStatus("⏳ Le jury réfléchit…");
-
-  turns = [{
-    role: "user",
-    content: "[PRÉSENTATION ORALE COMPLÈTE DE L'ÉLÈVE — 10 MINUTES, TRANSCRITE EN UN SEUL BLOC, NE PAS INTERROMPRE NI DEMANDER À L'ÉLÈVE DE RÉPÉTER CE QU'IL VIENT DE DIRE] "
-      + (presentationText || "(l'élève n'a rien dit ou le micro n'a pas fonctionné : signale-le-lui avec bienveillance et invite-le à décrire quand même sa situation à l'oral maintenant.)")
-  }];
-
-  try {
-    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
-    const res = await apiTurn(messages);
-    const line = String(res.replique || "").trim();
-    if (!line) throw { code: "reponse_invalide" };
-    turns.push({ role: "assistant", content: line });
-    lastClientLine = line;
-    addMsg("client", line);
-    setStatus("🔊 " + scenario.aiLabel + " parle…");
-    setBusy(false);
-    refreshQuota();
-    await speak(line);
-    if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
-    $("input").focus();
-  } catch (e) {
-    setBusy(false);
-    setStatus(errorText(e), true);
-  }
-}
-
-async function start(s) {
-  scenario = s; turns = []; finished = false; lastClientLine = s.opening;
-  $("chat").innerHTML = "";
-  $("scenarioTitle").textContent = s.title;
-  showScreen("chat");
-  setBusy(false);
-  if (!recognition) $("micBtn").title = "Micro non disponible dans ce navigateur";
-  await voicesReady;
-  addMsg("client", s.opening);
-  setStatus("🔊 " + s.aiLabel + " parle…");
-  await speak(s.opening);
-  if (s.type === "examen") {
-    beginPresentationPhase();
-    return;
-  }
-  if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
-  $("input").focus();
-}
-
-$("sendBtn").onclick = () => sellerSays($("input").value);
-$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
-$("replayBtn").onclick = () => { if (lastClientLine) speak(lastClientLine); };
-$("endBtn").onclick = evaluate;
-$("presDoneBtn").onclick = finishPresentation;
-$("quitBtn").onclick = () => {
-  stopSpeaking();
-  clearInterval(presTimerId);
-  if (listening) { userStopped = true; recognition.stop(); }
-  showScreen("setup");
-};
-$("againBtn").onclick = () => showScreen("setup");
-
-renderScenarios();
-</script>
-</body>
-</html>
+function speakBrowser(text, gender) {
+  return

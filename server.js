@@ -13,6 +13,10 @@ const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
 const MONTHLY_LIMIT_MINUTES = Number(process.env.MONTHLY_LIMIT_MINUTES || 85);
 // Seuil (en minutes restantes) en dessous duquel on avertit explicitement l'élève.
 const WARNING_THRESHOLD_MINUTES = Number(process.env.WARNING_THRESHOLD_MINUTES || 5);
+// Supabase (facultatif) : garde un historique permanent des évaluations.
+// Si absent, tout continue de fonctionner normalement, juste sans historique.
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 // Voix OpenAI (facultatif) : si absent, le navigateur utilise sa propre voix.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
@@ -138,6 +142,37 @@ app.post("/api/speech", requireStudent, async (req, res) => {
   }
 });
 
+/* ---------- Historique des évaluations (Supabase, facultatif) ---------- */
+function extractScore(text) {
+  const m = String(text || "").match(/NOTE GLOBALE\s*:\s*([\d]+(?:[.,][\d]+)?)\s*\/\s*20/i);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
+
+async function saveEvaluation({ code, name, diploma, evaluationText, transcript }) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return; // pas configuré : on ignore silencieusement
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/evaluations`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        student_code: code,
+        student_name: name,
+        diploma: diploma || null,
+        score: extractScore(evaluationText),
+        evaluation_text: evaluationText,
+        transcript: transcript || null
+      })
+    });
+  } catch (e) {
+    console.error("Erreur enregistrement Supabase:", e && e.message);
+  }
+}
+
 function extractJson(text) {
   try { return JSON.parse(text.trim()); } catch { /* continue */ }
   const match = text.match(/\{[\s\S]*\}/);
@@ -238,11 +273,14 @@ app.post("/api/evaluate", requireStudent, async (req, res) => {
     return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
   }
   const prompt = String(req.body.prompt || "");
+  const diploma = String(req.body.diploma || "").slice(0, 200);
+  const transcript = String(req.body.transcript || "").slice(0, 20000);
   if (!prompt) return res.status(400).json({ error: "requete_invalide" });
 
   try {
     const text = await callClaude([{ role: "user", content: prompt }], 1200);
     consumeQuota(req.studentCode, COST_EVAL);
+    saveEvaluation({ code: req.studentCode, name: req.studentName, diploma, evaluationText: text, transcript });
     res.json({ text });
   } catch (e) {
     res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });

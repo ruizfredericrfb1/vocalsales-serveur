@@ -508,10 +508,10 @@ async function apiTurn(messages) {
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
   return data; // {replique, etat}
 }
-async function apiEvaluate(prompt) {
+async function apiEvaluate(prompt, diploma, transcript) {
   const r = await fetch("/api/evaluate", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, prompt })
+    body: JSON.stringify({ code: studentCode, prompt, diploma, transcript })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
@@ -644,7 +644,7 @@ Une seule phrase.`;
 
   box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
   try {
-    box.textContent = await apiEvaluate(prompt);
+    box.textContent = await apiEvaluate(prompt, scenario.title, transcript);
     refreshQuota();
   } catch (e) {
     box.textContent = errorText(e);

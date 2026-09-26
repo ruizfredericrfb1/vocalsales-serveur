@@ -98,6 +98,16 @@
   button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
   button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
   #micBtn { min-width: 64px; font-size: 1.4rem; }
+
+  .timer {
+    font-size: 2.4rem; font-weight: 700; text-align: center;
+    font-variant-numeric: tabular-nums; color: var(--accent);
+    padding: 6px 0;
+  }
+  .timer.urgent { color: var(--rec); }
+  #presTranscript { min-height: 220px; resize: vertical; }
+  .pres-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  #presMicBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .65; } }
   @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
@@ -151,9 +161,8 @@
     <!-- Écran 1bis : préparation de l'oral d'examen -->
     <section id="screenPrep" class="hidden">
       <div class="card">
-        <h2 style="margin:0;">Avant l'oral</h2>
-        <p style="margin:0; color:var(--muted);">Décrivez en quelques lignes la situation de vente que vous allez présenter au jury : le produit ou service, le client, le contexte, ce que vous avez proposé.</p>
-        <textarea id="prepText" rows="5" placeholder="Ex : Lors de mon PFMP chez [enseigne], j'ai accueilli un client qui cherchait… Je lui ai proposé… "></textarea>
+        <h2 id="prepTitle" style="margin:0;">Avant l'oral</h2>
+        <p style="margin:0; color:var(--muted);">Vous allez d'abord <strong>présenter votre situation pendant 10 minutes maximum, sans interruption du jury</strong> — exactement comme le jour de l'épreuve. L'entretien avec le jury suivra ensuite, à partir de ce que vous aurez présenté.</p>
         <label for="prepGender" style="font-weight:400; color:var(--muted);">Voix du jury</label>
         <select id="prepGender">
           <option value="female">Une examinatrice</option>
@@ -163,6 +172,21 @@
           <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
           <button class="secondary" id="prepBackBtn">Retour</button>
         </div>
+      </div>
+    </section>
+
+    <!-- Écran 1ter : présentation chronométrée, sans intervention du jury -->
+    <section id="screenPresentation" class="hidden">
+      <div class="card">
+        <h2 style="margin:0;">Votre présentation</h2>
+        <p style="margin:0; color:var(--muted);">Le jury vous écoute sans vous interrompre. Parlez au micro — votre présentation s'écrit ci-dessous au fur et à mesure ; vous pouvez aussi la corriger ou la compléter au clavier. Cliquez sur « J'ai terminé » quand vous avez fini, avant la fin du temps si besoin.</p>
+        <div class="timer" id="presTimer">10:00</div>
+        <textarea id="presTranscript" placeholder="Votre présentation apparaîtra ici au fur et à mesure que vous parlez…"></textarea>
+        <div class="pres-actions">
+          <button id="presMicBtn" title="Parler">🎙️ Parler</button>
+          <button id="presDoneBtn">J'ai terminé ma présentation →</button>
+        </div>
+        <div class="status" id="presStatus"></div>
       </div>
     </section>
 
@@ -257,40 +281,45 @@ const SALES_SCENARIOS = [
   }
 ];
 const EXAM_TEMPLATES = [
-  { id: "oral-ccf", type: "examen", title: "Oral d'examen — présentation d'une situation de vente",
-    summary: "Vous présentez un cas préparé (PFMP, dossier) ; le jury vous interroge dessus.", aiLabel: "Le jury" }
+  { id: "e33-situation1", type: "examen", title: "Oral E33 (CCF) — Situation 1 : action de fidélisation (FDRC)",
+    summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
 ];
 
-function buildExamScenario(template, caseDescription, gender) {
+function buildExamScenario(template, gender) {
   return {
     id: template.id, type: "examen", title: template.title, aiLabel: template.aiLabel,
-    gender: gender || "female", caseDescription: caseDescription.trim(),
-    opening: "Bonjour, installez-vous. Vous disposez de quelques minutes pour nous présenter la situation de vente que vous avez préparée. Je vous écoute."
+    gender: gender || "female",
+    opening: "Bonjour, installez-vous. Je vous rappelle le déroulement de cette situation 1 de l'épreuve E33 : vous allez nous présenter votre phase préparatoire à une action de fidélisation de la clientèle, en vous appuyant sur les sources d'information que vous avez mobilisées et sur les deux actions que vous proposez. Vous avez jusqu'à dix minutes pour cela, sans interruption de notre part. Ensuite, nous échangerons avec vous pendant dix minutes sur ce que vous nous aurez présenté. Je vous écoute, quand vous êtes prêt."
   };
 }
 
 function RULES(s) {
   if (s.type === "examen") {
-    return `Tu joues le rôle d'un membre du jury d'un examen oral pour un diplôme de commerce et de vente (Bac Pro Métiers du commerce et de la vente, ou BTS NDRC/MCO), en France.
+    return `Tu joues le rôle du jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
 
-LE DOSSIER DE L'ÉLÈVE (tel qu'il te l'a décrit avant l'oral) :
-${s.caseDescription || "(non précisé)"}
+L'ÉLÈVE VIENT DE FAIRE SA PRÉSENTATION ORALE DE 10 MINUTES SANS INTERRUPTION (elle t'a été transmise intégralement dans le premier message ci-dessous, entre crochets). Tu ne l'as pas coupée pendant qu'elle parlait — c'est seulement maintenant que commence l'entretien de 10 minutes.
+
+CE QUE TU DOIS ÉVALUER PENDANT L'ENTRETIEN (grille officielle E33 Situation 1) :
+1. Pertinence du choix des sources d'information et des données recueillies (sources internes comme le SIC, sources externes, fiabilité, utilité pour la FDRC).
+2. Qualité du traitement des sollicitations clients : l'élève doit pouvoir expliciter sa propre contribution concrète à la fidélisation dans ses actions du quotidien.
+3. Pertinence des actions proposées : l'élève DOIT avoir proposé DEUX actions de FDRC. Si une seule action a été présentée, ou si aucune, ou si elles semblent peu cohérentes avec le contexte et la stratégie commerciale de l'entreprise, challenge-le précisément là-dessus.
+4. Qualité de la communication orale et du support numérique : demande-lui de décrire le support qu'il a utilisé s'il ne l'a pas fait clairement, évalue la structuration de sa présentation et son vocabulaire professionnel.
 
 RÈGLES :
 - Tu es UNIQUEMENT l'examinateur. Ne donne jamais la réponse, ne sors jamais du rôle.
+- Ta toute première réplique doit réagir en une phrase à la présentation (sans la résumer ni la commenter en détail), puis poser IMMÉDIATEMENT ta première question, ciblée sur celui des 4 points ci-dessus qui te semble le moins couvert par ce que l'élève vient de dire.
 - Tu parles à l'oral : phrases courtes et naturelles, 1 à 2 questions maximum par réplique.
-- Laisse d'abord l'élève terminer sa présentation avant de poser des questions, sauf s'il te sollicite.
-- Pose ensuite des questions précises de jury, en t'appuyant sur SON dossier : demande des précisions, challenge ses choix, teste sa maîtrise du sujet et sa réactivité — sans être hostile ni condescendant.
+- Pose des questions précises qui challengent les choix de l'élève sur SA propre présentation — jamais de question générique déconnectée de ce qu'il vient de dire.
+- Vérifie explicitement, à un moment de l'entretien, que les DEUX actions de FDRC ont bien été proposées et sont cohérentes avec le contexte — si ce n'est pas clair, demande-le directement.
 - Reste professionnel, exigeant mais bienveillant, comme un vrai examinateur.
 - REGISTRE ORAL (s'applique UNIQUEMENT au texte à l'intérieur du champ "replique") : tu parles, tu n'écris pas. Des phrases courtes, parfois inachevées ou reprises en cours de route, des hésitations légères ("bon", "donc", "alors"), des tournures orales ("vous m'avez dit que...", pas "vous avez indiqué que..."). Jamais plus d'une idée bien construite par phrase — évite les répliques trop propres, trop écrites, qui alignent plusieurs phrases parfaites d'affilée.
-- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Réagis toujours à ce que le candidat vient de dire, même si c'est bref, hors sujet ou maladroit — un vrai examinateur ne se répète pas, il relance, reformule sa question ou marque son étonnement.
-- Ne fais pas passer "etat" à "conclu" à cause d'une seule remarque déplacée ou d'une réponse creuse : redemande, insiste, ou exprime ta déception — un examinateur ne clôt pas un oral après un seul mauvais échange. Réserve "conclu" au moment où l'oral a réellement couvert le sujet (au moins 4 à 6 vrais échanges de fond).
+- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Réagis toujours à ce que le candidat vient de dire, même si c'est bref, hors sujet ou maladroit.
+- Ne fais pas passer "etat" à "conclu" avant d'avoir réellement couvert au moins 3 des 4 points de la grille (au moins 5 à 7 vrais échanges de fond) — jamais à cause d'une seule réponse creuse.
 
 FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
 {"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}
 
-Ta première réplique a déjà été dite : "${s.opening}"
-Le candidat va maintenant te répondre.`;
+Ta première réplique de bienvenue a déjà été dite : "${s.opening}"`;
   }
   return `Tu joues un rôle dans un simulateur d'entraînement à la vente pour des élèves de lycée professionnel (Bac Pro commerce / relation client).
 
@@ -315,7 +344,7 @@ Le vendeur va maintenant te répondre.`;
 
 /* ---------- Éléments ---------- */
 const $ = (id) => document.getElementById(id);
-const screens = { setup: $("screenSetup"), prep: $("screenPrep"), chat: $("screenChat"), debrief: $("screenDebrief") };
+const screens = { setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief") };
 function showScreen(name) {
   for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
   window.scrollTo(0, 0);
@@ -508,23 +537,31 @@ async function evaluate() {
     .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
     .join("\n");
 
-  const prompt = scenario.type === "examen" ? `Tu es professeur de vente en lycée professionnel, membre de jury pour les diplômes de commerce et de vente. Évalue l'élève qui passait l'ORAL D'EXAMEN dans cette simulation.
+  const prompt = scenario.type === "examen" ? `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
 
-Dossier présenté par l'élève : ${scenario.caseDescription || "(non précisé)"}
-
-Transcription :
+Transcription complète (présentation puis entretien) :
 ${transcript}
 
-Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+GRILLE OFFICIELLE À APPLIQUER (4 critères, chacun noté sur 5, note globale sur 20) :
+1. Pertinence du choix des sources d'information et qualité du traitement des sollicitations clients.
+2. Pertinence des actions proposées — vérifie explicitement si DEUX actions de FDRC ont été formulées et si elles sont cohérentes avec le contexte et la stratégie commerciale. Une seule action, ou des actions peu cohérentes, plafonne ce critère à 2/5 maximum ; aucune action proposée plafonne à 1/5.
+3. Qualité de la communication orale et écrite (structuration de la présentation, vocabulaire professionnel, clarté du support numérique décrit).
+4. Maîtrise du dossier pendant l'entretien (réactivité, justesse des réponses aux questions du jury, capacité à approfondir).
+
+RÈGLES DE NOTATION :
+- N'attribue jamais le maximum sur un critère sans une preuve précise et citable dans la transcription.
+- La moyenne réaliste d'un candidat moyen tourne autour de 10 à 12/20 ; réserve 16 et plus aux prestations qui remplissent véritablement les 4 critères à un niveau expert.
+- Justifie chaque note par un élément concret que l'élève a réellement dit, jamais par une impression générale.
+
+Rédige l'évaluation en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
 
 NOTE GLOBALE : x/20
 
-CRITÈRES DU JURY
-Maîtrise du dossier présenté : x/4 — une phrase de justification
-Structuration de la présentation : x/4 — une phrase
-Qualité de l'expression orale : x/4 — une phrase
-Pertinence des réponses aux questions : x/4 — une phrase
-Posture professionnelle (assurance, vocabulaire) : x/4 — une phrase
+CRITÈRES DE LA GRILLE E33
+Sources d'information et traitement des sollicitations clients : x/5 — une phrase citant un élément précis
+Pertinence des deux actions de FDRC proposées : x/5 — une phrase précisant si les deux actions ont bien été identifiées
+Qualité de la communication orale et du support : x/5 — une phrase
+Maîtrise du dossier pendant l'entretien : x/5 — une phrase
 
 TES POINTS FORTS
 - 2 points précis, en citant tes propres réponses
@@ -569,24 +606,37 @@ Une seule phrase.`;
   }
 }
 
-/* ---------- Micro (écoute continue, robuste au bruit de classe) ---------- */
+/* ---------- Micro (écoute continue, robuste au bruit de classe) ----------
+   Deux modes partagent le même moteur de reconnaissance :
+   - "chat"         : une réplique à la fois (entretien), comme avant.
+   - "presentation" : accumulation longue (jusqu'à 10 minutes), sans jamais
+                      envoyer quoi que ce soit à l'IA — on écrit juste dans
+                      la zone de texte de la présentation. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
+let micMode = "chat";
+const MAX_RESTARTS = { chat: 6, presentation: 60 };
+let finalText = "";
+let presBase = "";
+let userStopped = false;
+let autoRestarts = 0;
+let hadError = false;
 if (SR) {
   recognition = new SR();
   recognition.lang = "fr-FR";
   recognition.interimResults = true;
   recognition.continuous = true;
-  let finalText = "";
-  let userStopped = false;
-  let autoRestarts = 0;
-  let hadError = false;
 
   recognition.onstart = () => {
     listening = true;
-    $("micBtn").classList.add("listening");
-    setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
+    if (micMode === "presentation") {
+      $("presMicBtn").classList.add("listening");
+      $("presStatus").textContent = "🔴 Je vous écoute…";
+    } else {
+      $("micBtn").classList.add("listening");
+      setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
+    }
   };
   recognition.onresult = (e) => {
     let interim = "";
@@ -594,7 +644,11 @@ if (SR) {
       if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
       else interim += e.results[i][0].transcript;
     }
-    $("input").value = (finalText + interim).trim();
+    if (micMode === "presentation") {
+      $("presTranscript").value = (presBase + finalText + interim).trim();
+    } else {
+      $("input").value = (finalText + interim).trim();
+    }
   };
   recognition.onerror = (e) => {
     hadError = true;
@@ -605,18 +659,26 @@ if (SR) {
       "audio-capture": "Aucun micro détecté. Répondez au clavier.",
       "network": "Reconnaissance vocale indisponible. Répondez au clavier."
     }[e.error];
-    if (msg) { userStopped = true; setStatus(msg, true); }
+    if (msg) {
+      userStopped = true;
+      if (micMode === "presentation") $("presStatus").textContent = msg; else setStatus(msg, true);
+    }
   };
   recognition.onend = () => {
     listening = false;
     $("micBtn").classList.remove("listening");
-    if (!userStopped && autoRestarts < 6) {
+    $("presMicBtn") && $("presMicBtn").classList.remove("listening");
+    if (!userStopped && autoRestarts < MAX_RESTARTS[micMode]) {
       autoRestarts++;
       try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
     }
     autoRestarts = 0;
-    const said = $("input").value.trim();
-    if (said && !hadError) sellerSays(said);
+    if (micMode === "chat") {
+      const said = $("input").value.trim();
+      if (said && !hadError) sellerSays(said);
+    } else if (micMode === "presentation") {
+      $("presStatus").textContent = "";
+    }
     hadError = false;
   };
 
@@ -624,13 +686,24 @@ if (SR) {
     if (busy || finished) return;
     if (listening) { userStopped = true; recognition.stop(); return; }
     stopSpeaking();
+    micMode = "chat";
     finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
     $("input").value = "";
     setStatus("");
     try { recognition.start(); } catch (err) { setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
   };
+  $("presMicBtn").onclick = () => {
+    if (listening) { userStopped = true; recognition.stop(); return; }
+    micMode = "presentation";
+    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    presBase = $("presTranscript").value ? $("presTranscript").value.trim() + " " : "";
+    $("presStatus").textContent = "";
+    try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
+  };
 } else {
   $("micBtn").onclick = () => {};
+  $("presMicBtn").onclick = () => {};
+  $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
 }
 
 /* ---------- Démarrage ---------- */
@@ -652,17 +725,81 @@ function renderScenarios() {
     const t = document.createElement("strong"); t.textContent = tpl.title;
     const d = document.createElement("span"); d.textContent = tpl.summary;
     b.append(t, d);
-    b.onclick = () => { pendingTemplate = tpl; $("prepText").value = ""; showScreen("prep"); };
+    b.onclick = () => { pendingTemplate = tpl; showScreen("prep"); };
     listExamen.appendChild(b);
   }
 }
 let pendingTemplate = null;
 $("prepStartBtn").onclick = () => {
-  const desc = $("prepText").value.trim();
-  if (!desc) { $("prepText").focus(); return; }
-  start(buildExamScenario(pendingTemplate, desc, $("prepGender").value));
+  start(buildExamScenario(pendingTemplate, $("prepGender").value));
 };
 $("prepBackBtn").onclick = () => showScreen("setup");
+
+/* ---------- Phase 1 : présentation chronométrée (E33), sans intervention du jury ---------- */
+let presTimerId = null;
+let presRemaining = 600;
+let presentationDone = false;
+
+function updatePresTimerDisplay() {
+  const r = Math.max(presRemaining, 0);
+  const m = Math.floor(r / 60), sec = r % 60;
+  $("presTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
+  $("presTimer").classList.toggle("urgent", r <= 60);
+}
+
+function beginPresentationPhase() {
+  presentationDone = false;
+  $("presTranscript").value = "";
+  $("presStatus").textContent = "";
+  presRemaining = 600;
+  updatePresTimerDisplay();
+  showScreen("presentation");
+  clearInterval(presTimerId);
+  presTimerId = setInterval(() => {
+    presRemaining--;
+    updatePresTimerDisplay();
+    if (presRemaining <= 0) finishPresentation();
+  }, 1000);
+}
+
+async function finishPresentation() {
+  if (presentationDone) return;
+  presentationDone = true;
+  clearInterval(presTimerId);
+  if (listening) { userStopped = true; recognition.stop(); }
+
+  const presentationText = $("presTranscript").value.trim();
+  showScreen("chat");
+  $("scenarioTitle").textContent = scenario.title;
+  addMsg("seller", presentationText || "(aucune présentation enregistrée)");
+  setBusy(true);
+  setStatus("⏳ Le jury réfléchit…");
+
+  turns = [{
+    role: "user",
+    content: "[PRÉSENTATION ORALE COMPLÈTE DE L'ÉLÈVE — 10 MINUTES, TRANSCRITE EN UN SEUL BLOC, NE PAS INTERROMPRE NI DEMANDER À L'ÉLÈVE DE RÉPÉTER CE QU'IL VIENT DE DIRE] "
+      + (presentationText || "(l'élève n'a rien dit ou le micro n'a pas fonctionné : signale-le-lui avec bienveillance et invite-le à décrire quand même sa situation à l'oral maintenant.)")
+  }];
+
+  try {
+    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
+    const res = await apiTurn(messages);
+    const line = String(res.replique || "").trim();
+    if (!line) throw { code: "reponse_invalide" };
+    turns.push({ role: "assistant", content: line });
+    lastClientLine = line;
+    addMsg("client", line);
+    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setBusy(false);
+    refreshQuota();
+    await speak(line);
+    if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+    $("input").focus();
+  } catch (e) {
+    setBusy(false);
+    setStatus(errorText(e), true);
+  }
+}
 
 async function start(s) {
   scenario = s; turns = []; finished = false; lastClientLine = s.opening;
@@ -675,6 +812,10 @@ async function start(s) {
   addMsg("client", s.opening);
   setStatus("🔊 " + s.aiLabel + " parle…");
   await speak(s.opening);
+  if (s.type === "examen") {
+    beginPresentationPhase();
+    return;
+  }
   if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
   $("input").focus();
 }
@@ -683,7 +824,13 @@ $("sendBtn").onclick = () => sellerSays($("input").value);
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
 $("replayBtn").onclick = () => { if (lastClientLine) speak(lastClientLine); };
 $("endBtn").onclick = evaluate;
-$("quitBtn").onclick = () => { stopSpeaking(); if (listening) recognition.stop(); showScreen("setup"); };
+$("presDoneBtn").onclick = finishPresentation;
+$("quitBtn").onclick = () => {
+  stopSpeaking();
+  clearInterval(presTimerId);
+  if (listening) { userStopped = true; recognition.stop(); }
+  showScreen("setup");
+};
 $("againBtn").onclick = () => showScreen("setup");
 
 renderScenarios();

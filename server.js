@@ -1,7 +1,7 @@
 // VocalSales — serveur
 // Garde la clé API Anthropic côté serveur (jamais visible des élèves),
 // vérifie le code de connexion de chaque élève, et applique un quota
-// hebdomadaire (par défaut 2 h par semaine).
+// mensuel (par défaut 85 minutes par mois civil).
 
 const express = require("express");
 const fs = require("fs");
@@ -10,7 +10,9 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
-const WEEKLY_LIMIT_MINUTES = Number(process.env.WEEKLY_LIMIT_MINUTES || 120);
+const MONTHLY_LIMIT_MINUTES = Number(process.env.MONTHLY_LIMIT_MINUTES || 85);
+// Seuil (en minutes restantes) en dessous duquel on avertit explicitement l'élève.
+const WARNING_THRESHOLD_MINUTES = Number(process.env.WARNING_THRESHOLD_MINUTES || 5);
 // Voix OpenAI (facultatif) : si absent, le navigateur utilise sa propre voix.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
@@ -43,27 +45,22 @@ function loadUsage() {
 function saveUsage(u) {
   fs.writeFileSync(USAGE_FILE, JSON.stringify(u, null, 2));
 }
-function isoWeekKey(d = new Date()) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - day + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
-  return `${date.getUTCFullYear()}-W${week}`;
+function monthKey(d = new Date()) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 function getStudentUsage(code) {
   const usage = loadUsage();
-  const week = isoWeekKey();
+  const month = monthKey();
   const entry = usage[code];
-  if (!entry || entry.week !== week) return { usage, week, minutes: 0 };
-  return { usage, week, minutes: entry.minutes };
+  if (!entry || entry.month !== month) return { usage, month, minutes: 0 };
+  return { usage, month, minutes: entry.minutes };
 }
 
 function consumeQuota(code, cost) {
-  const { usage, week, minutes } = getStudentUsage(code);
+  const { usage, month, minutes } = getStudentUsage(code);
   const next = minutes + cost;
-  usage[code] = { week, minutes: next };
+  usage[code] = { month, minutes: next };
   saveUsage(usage);
   return next;
 }
@@ -85,11 +82,13 @@ function requireStudent(req, res, next) {
 
 app.get("/api/status", requireStudent, (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
+  const minutesRestantes = Math.max(0, MONTHLY_LIMIT_MINUTES - minutes);
   res.json({
     nom: req.studentName,
     minutesUtilisees: minutes,
-    minutesLimite: WEEKLY_LIMIT_MINUTES,
-    minutesRestantes: Math.max(0, WEEKLY_LIMIT_MINUTES - minutes)
+    minutesLimite: MONTHLY_LIMIT_MINUTES,
+    minutesRestantes,
+    avertissement: minutesRestantes > 0 && minutesRestantes <= WARNING_THRESHOLD_MINUTES
   });
 });
 
@@ -217,8 +216,8 @@ async function getValidReply(messages, maxTokens, attempts = 3) {
 // Un tour de dialogue (négociation ou oral) : renvoie {replique, etat}
 app.post("/api/turn", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
-  if (minutes >= WEEKLY_LIMIT_MINUTES) {
-    return res.status(429).json({ error: "quota_depasse", message: "Quota hebdomadaire atteint. Réessayez la semaine prochaine." });
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
   }
   const messages = Array.isArray(req.body.messages) ? req.body.messages : null;
   if (!messages || !messages.length) return res.status(400).json({ error: "requete_invalide" });
@@ -235,8 +234,8 @@ app.post("/api/turn", requireStudent, async (req, res) => {
 // Évaluation finale : renvoie {text}
 app.post("/api/evaluate", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
-  if (minutes >= WEEKLY_LIMIT_MINUTES) {
-    return res.status(429).json({ error: "quota_depasse", message: "Quota hebdomadaire atteint. Réessayez la semaine prochaine." });
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
   }
   const prompt = String(req.body.prompt || "");
   if (!prompt) return res.status(400).json({ error: "requete_invalide" });

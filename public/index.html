@@ -1,1049 +1,899 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Mic, MicOff, Play, Pause, RefreshCw, Award, BookOpen, Users, 
-  Settings, CheckCircle, AlertTriangle, HelpCircle, User, Briefcase, 
-  Clock, BarChart3, ChevronRight, Sparkles, FileText, Download, Plus, 
-  TrendingUp, Shield, Volume2, Send, Cpu, Lightbulb, Lock, Activity
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VocalSales — Simulateur de vente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
+    --accent: #1f6f5c; --accent-ink: #ffffff; --client: #e3ebe8; --seller: #1f6f5c; --seller-ink: #ffffff;
+    --ok: #1d7a3e; --ko: #b3261e; --line: #cfdad6; --rec: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
+      --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
+      --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
+    --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
+    --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+    font-size: 18px; line-height: 1.5;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 48px; }
+  h1 { font-size: 1.8rem; margin: 0; }
+  .tagline { color: var(--muted); margin: 4px 0 24px; }
+  .hidden { display: none !important; }
 
-const DIPLOMA_CONFIGS = [
+  .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
+  .group-title:first-of-type { margin-top: 0; }
+  .group-hint { color: var(--muted); margin: -6px 0 12px; font-size: .95rem; }
+
+  .scenarios { display: grid; gap: 12px; }
+  .scenario {
+    text-align: left; background: var(--card); color: var(--ink);
+    border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px;
+    font: inherit; cursor: pointer; display: grid; gap: 4px;
+  }
+  .scenario:hover, .scenario:focus-visible { border-color: var(--accent); outline: none; }
+  .scenario strong { font-size: 1.1rem; }
+  .scenario span { color: var(--muted); font-size: .95rem; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; display: grid; gap: 12px;
+  }
+  label { font-weight: 700; }
+  select, input[type="text"] {
+    font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line);
+    background: var(--card); color: var(--ink);
+  }
+  input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
+
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: .92rem; margin-bottom: 10px; }
+  .quota { font-weight: 700; }
+  .quota.low { color: var(--ko); }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .bar h2 { font-size: 1.15rem; margin: 0; }
+  .chat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; height: min(52vh, 460px); overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; }
+  .msg small { display: block; font-size: .78rem; opacity: .75; margin-bottom: 2px; font-weight: 700; }
+  .msg.client { background: var(--client); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.seller { background: var(--seller); color: var(--seller-ink); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.note { align-self: center; background: transparent; color: var(--muted); font-style: italic; font-size: .95rem; }
+
+  .status { min-height: 1.6em; margin: 10px 2px; color: var(--muted); font-weight: 700; }
+  .status.err { color: var(--ko); }
+
+  .reply { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: stretch; }
+  textarea {
+    font: inherit; resize: none; min-height: 56px; padding: 12px 14px;
+    border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--ink);
+  }
+  textarea:focus-visible { outline: none; border-color: var(--accent); }
+  button {
+    font: inherit; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer;
+    padding: 12px 18px; background: var(--accent); color: var(--accent-ink);
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  #micBtn { min-width: 64px; font-size: 1.4rem; }
+
+  .timer {
+    font-size: 2.4rem; font-weight: 700; text-align: center;
+    font-variant-numeric: tabular-nums; color: var(--accent);
+    padding: 6px 0;
+  }
+  .timer.urgent { color: var(--rec); }
+  #presTranscript { min-height: 220px; resize: vertical; }
+  .pres-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  #presMicBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
+  #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .65; } }
+  @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+  .debrief {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; white-space: pre-wrap;
+  }
+  @media (max-width: 560px) {
+    .reply { grid-template-columns: auto 1fr; }
+    #sendBtn { grid-column: 1 / -1; }
+    .msg { max-width: 92%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>VocalSales</h1>
+  <p class="tagline">Entraînement à la vente et préparation aux oraux d'examen, face à une IA.</p>
+
+  <!-- Écran 0 : connexion -->
+  <section id="screenLogin">
+    <div class="card">
+      <label for="codeInput">Votre code de connexion</label>
+      <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
+      <div id="loginError" class="status err"></div>
+      <div class="actions" style="margin-top:0;">
+        <button id="loginBtn">Se connecter</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <span id="whoami"></span>
+      <span class="quota" id="quota"></span>
+    </div>
+
+    <!-- Écran 1 : choix du mode / scénario -->
+    <section id="screenSetup">
+      <h2 class="group-title">S'entraîner à la vente</h2>
+      <p class="group-hint">Le client parlera en premier : répondez au micro ou au clavier.</p>
+      <div class="scenarios" id="scenarioListVente"></div>
+
+      <h2 class="group-title">Se préparer à un oral d'examen</h2>
+      <p class="group-hint">Un jury vous interroge sur une situation de vente que vous avez préparée.</p>
+      <div class="scenarios" id="scenarioListExamen"></div>
+    </section>
+
+    <!-- Écran 1bis : préparation de l'oral d'examen -->
+    <section id="screenPrep" class="hidden">
+      <div class="card">
+        <h2 id="prepTitle" style="margin:0;">Avant l'oral</h2>
+        <p style="margin:0; color:var(--muted);">Vous allez d'abord <strong>présenter votre situation pendant 10 minutes maximum, sans interruption du jury</strong> — exactement comme le jour de l'épreuve. L'entretien avec le jury suivra ensuite, à partir de ce que vous aurez présenté.</p>
+        <p style="margin:0; color:var(--muted); font-size:.92rem;">Le jury est composé de deux personnes, comme le jour de l'examen : votre professeur(e) d'économie-gestion, et un(e) professionnel(le) du secteur commerce/vente.</p>
+        <label for="prepGenderProf" style="font-weight:400; color:var(--muted);">Voix du professeur / de la professeure</label>
+        <select id="prepGenderProf">
+          <option value="female">Une professeure</option>
+          <option value="male">Un professeur</option>
+        </select>
+        <label for="prepGenderPro" style="font-weight:400; color:var(--muted);">Voix du professionnel / de la professionnelle</label>
+        <select id="prepGenderPro">
+          <option value="male">Un professionnel</option>
+          <option value="female">Une professionnelle</option>
+        </select>
+        <div class="actions" style="margin-top:0;">
+          <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
+          <button class="secondary" id="prepBackBtn">Retour</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Écran 1ter : présentation chronométrée, sans intervention du jury -->
+    <section id="screenPresentation" class="hidden">
+      <div class="card">
+        <h2 style="margin:0;">Votre présentation</h2>
+        <p style="margin:0; color:var(--muted);">Le jury vous écoute sans vous interrompre. Parlez au micro — votre présentation s'écrit ci-dessous au fur et à mesure ; vous pouvez aussi la corriger ou la compléter au clavier. Cliquez sur « J'ai terminé » quand vous avez fini, avant la fin du temps si besoin.</p>
+        <div class="timer" id="presTimer">10:00</div>
+        <textarea id="presTranscript" placeholder="Votre présentation apparaîtra ici au fur et à mesure que vous parlez…"></textarea>
+        <div class="pres-actions">
+          <button id="presMicBtn" title="Parler">🎙️ Parler</button>
+          <button id="presDoneBtn">J'ai terminé ma présentation →</button>
+        </div>
+        <div class="status" id="presStatus"></div>
+      </div>
+    </section>
+
+    <!-- Écran 2 : la vente / l'oral -->
+    <section id="screenChat" class="hidden">
+      <div class="bar">
+        <h2 id="scenarioTitle"></h2>
+        <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique">🔁 Réécouter</button>
+      </div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <div class="status" id="status"></div>
+      <div class="reply">
+        <button id="micBtn" title="Répondre au micro" aria-label="Répondre au micro">🎙️</button>
+        <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
+        <button id="sendBtn">Envoyer</button>
+      </div>
+      <div class="actions">
+        <button id="endBtn">Terminer et voir mon évaluation</button>
+        <button class="secondary" id="quitBtn">Changer de situation</button>
+      </div>
+    </section>
+
+    <!-- Écran 3 : l'évaluation -->
+    <section id="screenDebrief" class="hidden">
+      <h2>Votre évaluation</h2>
+      <div class="debrief" id="debrief">Analyse en cours…</div>
+      <div class="actions">
+        <button id="againBtn">Recommencer</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ---------- Connexion élève ---------- */
+let studentCode = null;
+
+async function apiStatus(code) {
+  const r = await fetch("/api/status?code=" + encodeURIComponent(code));
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || "Code invalide."); }
+  return r.json();
+}
+
+function renderQuota(s) {
+  const el = document.getElementById("quota");
+  el.textContent = "Temps restant cette semaine : " + s.minutesRestantes + " min / " + s.minutesLimite + " min";
+  el.classList.toggle("low", s.minutesRestantes <= 10);
+}
+
+document.getElementById("loginBtn").onclick = async () => {
+  const code = document.getElementById("codeInput").value.trim();
+  const err = document.getElementById("loginError");
+  err.textContent = "";
+  if (!code) return;
+  try {
+    const s = await apiStatus(code);
+    studentCode = code;
+    document.getElementById("whoami").textContent = "Connecté(e) : " + s.nom;
+    renderQuota(s);
+    document.getElementById("screenLogin").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+  } catch (e) {
+    err.textContent = e.message || "Connexion impossible.";
+  }
+};
+document.getElementById("codeInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("loginBtn").click();
+});
+
+/* ---------- Scénarios de négociation ---------- */
+const SALES_SCENARIOS = [
   {
-    id: 'bac-pro-mcv',
-    code: 'E33 / U33',
-    title: 'Bac Pro MCV - Option A/B',
-    description: 'Fidélisation de la clientèle et développement de la relation client.',
-    duration: 10,
-    jury: [
-      { role: 'Professeur', title: 'Professeur Éco-Gestion', focus: 'Diagnostic, SWOT, méthodologie, SIC', color: 'indigo' },
-      { role: 'Professionnel', title: 'Tuteur / Pro du Secteur', focus: 'Faisabilité terrain, ROI, réalisme des actions', color: 'emerald' }
-    ],
-    rubrics: [
-      { id: 'r1', name: 'Analyse du contexte & diagnostic', max: 5 },
-      { id: 'r2', name: 'Pertinence des actions de fidélisation', max: 5 },
-      { id: 'r3', name: 'Cohérence des outils de relation client', max: 5 },
-      { id: 'r4', name: 'Qualité de l\'expression orale et argumentation', max: 5 }
-    ]
+    id: "casque", type: "vente", title: "Le casque audio",
+    summary: "Magasin d'électronique. Un client exigeant cherche un casque pour le métro.",
+    aiLabel: "Client", gender: "male",
+    opening: "Bonjour. Je cherche un bon casque audio pour mes trajets quotidiens dans le métro. Vous me conseillez quel modèle ?",
+    persona: "Tu es Karim, 34 ans, cadre, client dans un magasin d'électronique à Marseille. Tu prends le métro 1 h par jour. Budget réel : 150 € maximum, mais tu ne le dis que si le vendeur te pose la question. Tu as vu des casques moins chers sur internet et tu hésites. Tes objections possibles : le prix, l'autonomie de la batterie, le confort sur la durée, la comparaison avec internet. Tu es exigeant mais correct."
   },
   {
-    id: 'bts-mco',
-    code: 'E42 / ADOC',
-    title: 'BTS MCO - Oral d\'Animation commerciale',
-    description: 'Évaluation des performances de l\'unité commerciale et plan d\'action.',
-    duration: 10,
-    jury: [
-      { role: 'Professeur', title: 'Enseignant Management', focus: 'Indicateurs clés, stratégie, analyse de données', color: 'indigo' },
-      { role: 'Professionnel', title: 'Directeur de magasin', focus: 'Management d\'équipe, logistique, rentabilité', color: 'emerald' }
-    ],
-    rubrics: [
-      { id: 'r1', name: 'Analyse des performances de l\'UC', max: 5 },
-      { id: 'r2', name: 'Justification des choix stratégiques', max: 5 },
-      { id: 'r3', name: 'Plan d\'action et faisabilité opérationnelle', max: 5 },
-      { id: 'r4', name: 'Posture managériale et aisance relationnelle', max: 5 }
-    ]
+    id: "running", type: "vente", title: "Les chaussures de running",
+    summary: "Magasin de sport. Une cliente débutante hésite et connaît mal le produit.",
+    aiLabel: "Client", gender: "female",
+    opening: "Bonjour… Je voudrais commencer à courir, mais je ne sais pas du tout quelles chaussures prendre.",
+    persona: "Tu es Sophie, 45 ans, cliente dans un magasin de sport. Tu veux te mettre à la course à pied deux fois par semaine, sur route. Tu n'y connais rien, tu as peur de te faire mal aux genoux et de dépenser pour rien si tu abandonnes. Budget : 80 à 100 €. Tu es hésitante et tu poses des questions simples."
   },
   {
-    id: 'bts-ndrc',
-    code: 'E4 / Négociation',
-    title: 'BTS NDRC - Négociation & Vente',
-    description: 'Entretien de vente complexe et négociation B2B / B2C.',
-    duration: 15,
-    jury: [
-      { role: 'Client', title: 'Acheteur / Décideur', focus: 'Traitement des objections, négociation prix', color: 'rose' }
-    ],
-    rubrics: [
-      { id: 'r1', name: 'Découverte des besoins & écoute active', max: 5 },
-      { id: 'r2', name: 'Argumentation structurée (CAB)', max: 5 },
-      { id: 'r3', name: 'Réfutation des objections & prix', max: 5 },
-      { id: 'r4', name: 'Conclusion & verrouillage de la vente', max: 5 }
-    ]
+    id: "reclamation", type: "vente", title: "La réclamation",
+    summary: "Service client. Un client mécontent : sa commande a une semaine de retard.",
+    aiLabel: "Client", gender: "male",
+    opening: "Oui bonjour, alors je vous appelle parce que ça fait une semaine que j'attends ma commande, et personne n'est capable de me dire où elle est !",
+    persona: "Tu es Monsieur Lopez, 58 ans. Tu as commandé un canapé en ligne, livraison prévue il y a 7 jours, toujours rien. Tu as déjà appelé deux fois sans réponse claire. Tu es énervé au début, mais tu te calmes si le conseiller t'écoute vraiment, reformule ton problème et te propose une solution concrète. Si on te répond de façon vague ou qu'on te coupe, tu t'énerves davantage et tu menaces d'annuler."
   }
 ];
-
-const INITIAL_STUDENTS = [
-  { id: 's1', name: 'Thomas Bernard', class: 'Terminales Bac Pro MCV', code: 'MCV-892', totalTime: '42 min', quota: 60, scoreAvg: 13.5, status: 'Actif', lastSim: 'E33 Oral Blanc - Magasin Intersport' },
-  { id: 's2', name: 'Camille Leroy', class: 'Terminales Bac Pro MCV', code: 'MCV-341', totalTime: '28 min', quota: 60, scoreAvg: 11.0, status: 'Actif', lastSim: 'E33 Oral Blanc - Sephora' },
-  { id: 's3', name: 'Lucas Moreau', class: 'BTS MCO 2', code: 'MCO-112', totalTime: '55 min', quota: 90, scoreAvg: 15.2, status: 'Actif', lastSim: 'E42 Simulation - Fnac Darty' },
-  { id: 's4', name: 'Léa Petit', class: 'Terminales Bac Pro MCV', code: 'MCV-554', totalTime: '12 min', quota: 60, scoreAvg: 9.5, status: 'En retard', lastSim: 'Entraînement Traitement Objections' }
+const EXAM_TEMPLATES = [
+  { id: "e33-situation1", type: "examen", title: "Oral E33 (CCF) — Situation 1 : action de fidélisation (FDRC)",
+    summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
 ];
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('simulator');
-  const [selectedDiploma, setSelectedDiploma] = useState(DIPLOMA_CONFIGS[0]);
-  
-  // Simulator State
-  const [simPhase, setSimPhase] = useState('setup'); // setup, presentation, qna, evaluation
-  const [isRecording, setIsRecording] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [activeJuryIndex, setActiveJuryIndex] = useState(0);
-  const [transcript, setTranscript] = useState([]);
-  const [userSpeechInput, setUserSpeechInput] = useState('');
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [evalData, setEvalData] = useState(null);
-
-  // Audio visualizer state
-  const [waveHeights, setWaveHeights] = useState([20, 40, 15, 60, 30, 80, 45, 25, 70, 35, 50, 20]);
-
-  // Teacher Dashboard State
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
-  const [selectedStudentForReview, setSelectedStudentForReview] = useState(null);
-  const [newCodeModal, setNewCodeModal] = useState(false);
-
-  // Customizer State
-  const [customPrompts, setCustomPrompts] = useState({
-    systemInstruction: "Vous êtes un jury composé d'un professeur d'économie-gestion et d'un tuteur professionnel. Vous évaluez un oral E33 Bac Pro MCV.",
-    objectionStrictness: 'Medium',
-    dynamicBudget: '1500€',
-    clientPersonality: 'Pressé et exigeant sur le ROI'
-  });
-
-  useEffect(() => {
-    let interval = null;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => prev + 1);
-        // Simulate audio waveform movement
-        setWaveHeights(prev => prev.map(() => Math.floor(Math.random() * 75) + 10));
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  const generateJuryQuestion = async (userText) => {
-    setAiGenerating(true);
-    const juryMember = selectedDiploma.jury[activeJuryIndex % selectedDiploma.jury.length];
-    
-    // Switch active jury for realistic dual-dialogue
-    const nextJuryRole = juryMember.role;
-
-    const systemPrompt = `
-      Tu es un membre du jury pour l'oral d'examen ${selectedDiploma.title}.
-      Rôle actuel : ${juryMember.title} (${juryMember.focus}).
-      Ta consigne pédagogique :
-      - Si la présentation de l'élève est incomplète, questionne d'abord le diagnostic (clientèle, concurrence, zone de chalandise) avant d'attaquer les actions.
-      - Pose UNE SEULE question concise et réaliste (max 3 phrases).
-      - Reste professionnel, exigeant mais constructif.
-    `;
-
-    const userQuery = `L'élève vient de dire : "${userText}". Réponds en tant que ${juryMember.title}.`;
-
-    try {
-      // Exponential Backoff API Call Pattern
-      let response = null;
-      let delay = 1000;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: userQuery }] }],
-              systemInstruction: { parts: [{ text: systemPrompt }] }
-            })
-          });
-          if (response.ok) break;
-        } catch (e) {
-          if (attempt === 2) throw e;
-          await new Promise(r => setTimeout(r, delay));
-          delay *= 2;
-        }
-      }
-
-      if (response && response.ok) {
-        const result = await response.json();
-        const replyText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Pouvez-vous préciser l'impact mesuré sur votre zone de chalandise ?";
-        
-        setTranscript(prev => [
-          ...prev,
-          { speaker: 'Élève', text: userText, timestamp: formatTime(timerSeconds) },
-          { speaker: `${juryMember.title} (${juryMember.role})`, text: replyText, timestamp: formatTime(timerSeconds + 2), role: nextJuryRole }
-        ]);
-      } else {
-        // Fallback simulated response
-        setTranscript(prev => [
-          ...prev,
-          { speaker: 'Élève', text: userText, timestamp: formatTime(timerSeconds) },
-          { speaker: `${juryMember.title}`, text: "Comment avez-vous calculé le retour sur investissement de cette campagne de fidélisation ?", timestamp: formatTime(timerSeconds + 2) }
-        ]);
-      }
-    } catch (err) {
-      setTranscript(prev => [
-        ...prev,
-        { speaker: 'Élève', text: userText, timestamp: formatTime(timerSeconds) },
-        { speaker: `${juryMember.title}`, text: "Pouvez-vous expliciter le lien entre votre matrice SWOT et la deuxième action proposée ?", timestamp: formatTime(timerSeconds + 2) }
-      ]);
-    } finally {
-      setAiGenerating(false);
-      setActiveJuryIndex(prev => (prev + 1) % selectedDiploma.jury.length);
-    }
+function buildExamScenario(template, genderProf, genderPro) {
+  return {
+    id: template.id, type: "examen", title: template.title, aiLabel: template.aiLabel,
+    genderByMembre: { professeur: genderProf || "female", professionnel: genderPro || "male" },
+    openingSegments: [
+      { membre: "professeur", text: "Bonjour, installez-vous. Je suis votre professeure d'économie-gestion, et je siège aujourd'hui avec un professionnel du secteur du commerce pour cette situation 1 de l'épreuve E33." },
+      { membre: "professionnel", text: "Bonjour. De mon côté, je serai surtout attentif à la façon dont vos propositions tiendraient vraiment sur le terrain, dans une entreprise réelle." },
+      { membre: "professeur", text: "Vous allez nous présenter votre phase préparatoire à une action de fidélisation de la clientèle, en vous appuyant sur les sources d'information mobilisées et sur les deux actions que vous proposez. Vous avez jusqu'à dix minutes, sans interruption de notre part. Ensuite, nous échangerons avec vous pendant dix minutes. Je vous écoute, quand vous êtes prêt." }
+    ]
   };
-
-  const generatePedagogicalEvaluation = async () => {
-    setAiGenerating(true);
-    setSimPhase('evaluation');
-
-    const fullTranscriptText = transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-
-    const systemPrompt = `
-      Act en tant qu'expert pédagogique et inspecteur d'académie.
-      Évalue la prestation orale suivante pour l'examen ${selectedDiploma.title}.
-      Fournis une évaluation structurée basée sur les critères officiels.
-      RÈGLES STRICTES :
-      1. Donne un niveau de maîtrise pour chaque critère : "Insuffisant", "Fragile", "Satisfaisant", "Très satisfaisant".
-      2. Fournis des citations exactes de l'élève ("preuves").
-      3. Donne une note indicative /20 (La moyenne d'un élève moyen est 10-12/20).
-      4. Indique que cette note est un indicateur d'entraînement non officiel.
-    `;
-
-    const userQuery = `Voici la transcription intégrale de l'oral :\n${fullTranscriptText}`;
-
-    const schema = {
-      type: "OBJECT",
-      properties: {
-        scoreIndicative: { type: "NUMBER" },
-        overallSummary: { type: "STRING" },
-        strengths: { type: "ARRAY", items: { type: "STRING" } },
-        improvements: { type: "ARRAY", items: { type: "STRING" } },
-        criteriaEvaluations: {
-          type: "ARRAY",
-          items: {
-            type: "OBJECT",
-            properties: {
-              criterionName: { type: "STRING" },
-              masteryLevel: { type: "STRING" },
-              evidenceQuote: { type: "STRING" },
-              feedback: { type: "STRING" }
-            },
-            propertyOrdering: ["criterionName", "masteryLevel", "evidenceQuote", "feedback"]
-          }
-        }
-      },
-      propertyOrdering: ["scoreIndicative", "overallSummary", "strengths", "improvements", "criteriaEvaluations"]
-    };
-
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: userQuery }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: schema
-          }
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const parsed = JSON.parse(result.candidates[0].content.parts[0].text);
-        setEvalData(parsed);
-      } else {
-        throw new Error('Fallback evaluation');
-      }
-    } catch (e) {
-      // Mocked pedagogical fallbacks matching ChatGPT recommendation criteria
-      setEvalData({
-        scoreIndicative: 12.5,
-        overallSummary: "Prestation équilibrée avec un bon dynamisme. La présentation initiale est claire mais le diagnostic territorial manque de chiffres précis. L'entretien avec le jury a montré une bonne réactivité.",
-        strengths: [
-          "Respect du temps imparti lors du pitch initial (9m 40s)",
-          "Posture professionnelle et vocabulaire commercial adapté",
-          "Bonne argumentation sur la deuxième action de fidélisation"
-        ],
-        improvements: [
-          "Approfondir la zone de chalandise avec des données démographiques",
-          "Justifier davantage le choix des outils de suivi (SIC / CRM)",
-          "Ne pas hésiter à étayer les coûts prévisionnels"
-        ],
-        criteriaEvaluations: [
-          {
-            criterionName: "Analyse du contexte & diagnostic",
-            masteryLevel: "Fragile",
-            evidenceQuote: "J'ai choisi une carte de fidélité car les concurrents en ont une.",
-            feedback: "Le diagnostic reste superficiel. Vous devez lier directement votre SWOT aux attentes de votre cible principale."
-          },
-          {
-            criterionName: "Pertinence des actions de fidélisation",
-            masteryLevel: "Satisfaisant",
-            evidenceQuote: "L'opération Instagram a permis de toucher 450 prospects qualifiés.",
-            feedback: "Excellente illustration terrain. L'action est réaliste et rentable."
-          },
-          {
-            criterionName: "Cohérence des outils de relation client",
-            masteryLevel: "Satisfaisant",
-            evidenceQuote: "J'utilise le logiciel de caisse pour enregistrer les données d'achat.",
-            feedback: "Les outils techniques sont maîtrisés. Pensez à mentionner la conformité RGPD."
-          },
-          {
-            criterionName: "Qualité de l'expression orale & argumentation",
-            masteryLevel: "Très satisfaisant",
-            evidenceQuote: "Si vous me permettez de préciser notre calcul de marge...",
-            feedback: "Aisance orale remarquable, très bon positionnement face aux deux membres du jury."
-          }
-        ]
-      });
-    } finally {
-      setAiGenerating(false);
-    }
-  };
-
-  const formatTime = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const handleSendUserInput = () => {
-    if (!userSpeechInput.trim()) return;
-    const text = userSpeechInput;
-    setUserSpeechInput('');
-    generateJuryQuestion(text);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans flex flex-col">
-      {/* HEADER BAR */}
-      <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-tr from-indigo-500 to-purple-500 p-2 rounded-xl shadow-lg shadow-indigo-500/30">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">
-                VocalSales
-              </span>
-              <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full">
-                Édition EdTech Pro
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Tabs */}
-          <nav className="hidden md:flex space-x-1 bg-slate-900/60 p-1 rounded-xl border border-slate-700/60">
-            {[
-              { id: 'simulator', label: 'Simulateur Oral', icon: Mic },
-              { id: 'teacher', label: 'Espace Enseignant', icon: Users },
-              { id: 'customizer', label: 'Moteur Diplômes', icon: Settings }
-            ].map(tab => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isActive 
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Quick User Badge */}
-          <div className="flex items-center space-x-3 border-l border-slate-700 pl-4">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-medium text-slate-300">Lycée Condorcet</div>
-              <div className="text-[10px] text-indigo-400">Code: MCV-2026</div>
-            </div>
-            <div className="w-9 h-9 bg-indigo-900/80 border border-indigo-500/40 rounded-full flex items-center justify-center font-bold text-indigo-300 text-sm">
-              Prof
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* MOBILE NAV BOTTOM BAR */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 z-50 flex justify-around p-2">
-        <button onClick={() => setActiveTab('simulator')} className={`flex flex-col items-center p-2 text-xs ${activeTab === 'simulator' ? 'text-indigo-400' : 'text-slate-400'}`}>
-          <Mic className="w-5 h-5 mb-1" />
-          Simulateur
-        </button>
-        <button onClick={() => setActiveTab('teacher')} className={`flex flex-col items-center p-2 text-xs ${activeTab === 'teacher' ? 'text-indigo-400' : 'text-slate-400'}`}>
-          <Users className="w-5 h-5 mb-1" />
-          Enseignant
-        </button>
-        <button onClick={() => setActiveTab('customizer')} className={`flex flex-col items-center p-2 text-xs ${activeTab === 'customizer' ? 'text-indigo-400' : 'text-slate-400'}`}>
-          <Settings className="w-5 h-5 mb-1" />
-          Scénarios
-        </button>
-      </div>
-
-      {/* MAIN CONTAINER CONTENT */}
-      <main className="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-20 md:pb-8">
-        
-        {/* TAB 1: STUDENT SIMULATOR */}
-        {activeTab === 'simulator' && (
-          <div className="space-y-6">
-            
-            {/* Top Selector Card */}
-            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              <div>
-                <div className="flex items-center space-x-3">
-                  <span className="px-2.5 py-1 text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-md">
-                    {selectedDiploma.code}
-                  </span>
-                  <h1 className="text-xl font-bold text-white">{selectedDiploma.title}</h1>
-                </div>
-                <p className="text-slate-400 text-sm mt-1">{selectedDiploma.description}</p>
-              </div>
-
-              {/* Diploma Select Dropdown */}
-              <div className="flex items-center space-x-3 w-full lg:w-auto">
-                <select
-                  value={selectedDiploma.id}
-                  onChange={(e) => {
-                    const found = DIPLOMA_CONFIGS.find(d => d.id === e.target.value);
-                    if (found) setSelectedDiploma(found);
-                  }}
-                  className="bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none w-full lg:w-64"
-                >
-                  {DIPLOMA_CONFIGS.map(d => (
-                    <option key={d.id} value={d.id}>{d.title}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* SIMULATION SETUP PHASE */}
-            {simPhase === 'setup' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
-                  <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
-                    <BookOpen className="w-5 h-5 text-indigo-400" />
-                    <span>Déroulement officiel de l'épreuve</span>
-                  </h2>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-slate-900/80 border border-slate-700/60 p-4 rounded-xl">
-                      <div className="text-xs font-semibold text-indigo-400 mb-1">Étape 1 • 10 Minutes</div>
-                      <div className="font-medium text-white mb-2">Présentation continue</div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        L'élève présente son étude contextuelle, son diagnostic territorial (SWOT) et ses actions de fidélisation sans interruption du jury.
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-900/80 border border-slate-700/60 p-4 rounded-xl">
-                      <div className="text-xs font-semibold text-emerald-400 mb-1">Étape 2 • 10-15 Minutes</div>
-                      <div className="font-medium text-white mb-2">Entretien avec le jury mixte</div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Le Professeur Éco-Gestion interroge la méthodologie et le diagnostic. Le Professionnel évalue le réalisme terrain et le ROI.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Dual Jury Composition */}
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-300 mb-3">Composition du Jury IA :</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {selectedDiploma.jury.map((j, idx) => (
-                        <div key={idx} className="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/40">
-                          <div className={`p-2 rounded-lg bg-${j.color}-500/20 text-${j.color}-400 mt-0.5`}>
-                            {j.role === 'Professeur' ? <User className="w-5 h-5" /> : <Briefcase className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold text-slate-200">{j.title}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{j.focus}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setSimPhase('presentation');
-                      setTimerSeconds(0);
-                      setTranscript([
-                        { speaker: 'Système', text: 'Début de l\'épreuve E33. Vous disposez de 10 minutes de présentation ininterrompue. Activez votre micro pour commencer.', timestamp: '00:00' }
-                      ]);
-                    }}
-                    className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 transition-all transform active:scale-[0.99]"
-                  >
-                    <Play className="w-5 h-5 fill-current" />
-                    <span>Lancer la Simulation E33</span>
-                  </button>
-                </div>
-
-                {/* Pedagogical Advice Box */}
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
-                  <h3 className="text-md font-semibold text-indigo-300 flex items-center space-x-2">
-                    <Lightbulb className="w-5 h-5 text-amber-400" />
-                    <span>Conseils de réussite</span>
-                  </h3>
-                  <ul className="space-y-3 text-xs text-slate-300">
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>Ne sautez pas l'analyse de la zone de chalandise : le Professeur vérifie systématiquement le diagnostic.</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>Justifiez vos coûts et votre ROI : le Tuteur Professionnel sera attentif aux chiffres.</span>
-                    </li>
-                    <li className="flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span>Gardez un rythme régulier et une posture professionnelle tout au long de la transcription.</span>
-                    </li>
-                  </ul>
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs leading-relaxed">
-                    <strong>Note importante :</strong> Votre oral est retranscrit en direct. Utilisez le micro ou le clavier si vous êtes en salle informatique bruyante.
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* SIMULATION ACTIVE PHASE (Presentation & QnA) */}
-            {(simPhase === 'presentation' || simPhase === 'qna') && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Left Column: Live Audio Control & Stage */}
-                <div className="lg:col-span-1 space-y-6">
-                  <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6 text-center">
-                    
-                    {/* Phase Header Badge */}
-                    <div className="inline-flex items-center space-x-2 px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-semibold">
-                      <Activity className="w-3.5 h-3.5 animate-pulse text-indigo-400" />
-                      <span>
-                        {simPhase === 'presentation' ? 'Phase 1 : Presentation Continuous (10 min)' : 'Phase 2 : Entretien avec le Jury'}
-                      </span>
-                    </div>
-
-                    {/* Big Live Timer Display */}
-                    <div>
-                      <div className="text-4xl font-extrabold text-white font-mono tracking-wider">
-                        {formatTime(timerSeconds)}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">Temps écoulé</div>
-                    </div>
-
-                    {/* Audio Waveform Animation */}
-                    <div className="h-16 bg-slate-900/90 rounded-xl border border-slate-700 flex items-center justify-center px-4 space-x-1.5">
-                      {waveHeights.map((h, i) => (
-                        <div
-                          key={i}
-                          style={{ height: isRecording ? `${h}%` : '10%' }}
-                          className={`w-1.5 rounded-full transition-all duration-150 ${
-                            isRecording ? 'bg-gradient-to-t from-indigo-500 to-purple-400' : 'bg-slate-700'
-                          }`}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Micro Control Toggle Button */}
-                    <div className="flex flex-col items-center space-y-3">
-                      <button
-                        onClick={() => setIsRecording(!isRecording)}
-                        className={`w-20 h-20 rounded-full flex items-center justify-center transition-all transform active:scale-95 shadow-xl ${
-                          isRecording 
-                            ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/40 animate-pulse' 
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/40'
-                        }`}
-                      >
-                        {isRecording ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-                      </button>
-                      <span className="text-xs text-slate-300 font-medium">
-                        {isRecording ? 'Microphone actif (Cliquez pour couper)' : 'Cliquez pour activer le micro'}
-                      </span>
-                    </div>
-
-                    {/* Phase Advancement Button */}
-                    <div className="pt-4 border-t border-slate-700/80 space-y-2">
-                      {simPhase === 'presentation' && (
-                        <button
-                          onClick={() => {
-                            setSimPhase('qna');
-                            setTranscript(prev => [
-                              ...prev,
-                              { speaker: 'Système', text: 'Fin de la présentation. Début de l\'entretien de 10 minutes avec le jury.', timestamp: formatTime(timerSeconds) },
-                              { speaker: 'Professeur Éco-Gestion', text: 'Merci pour votre présentation. Pouvez-vous commencer par préciser le profil de votre zone de chalandise et vos concurrents direct ?', timestamp: formatTime(timerSeconds + 1) }
-                            ]);
-                          }}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-1"
-                        >
-                          <span>Passer à l'entretien Jury</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      <button
-                        onClick={generatePedagogicalEvaluation}
-                        disabled={aiGenerating}
-                        className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-1"
-                      >
-                        {aiGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4 text-amber-400" />}
-                        <span>Terminer & Générer l'Évaluation</span>
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Right Column: Live Transcript Feed & Text Input Fallback */}
-                <div className="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col h-[520px]">
-                  <div className="flex items-center justify-between pb-4 border-b border-slate-700">
-                    <h3 className="font-semibold text-white flex items-center space-x-2">
-                      <FileText className="w-4 h-4 text-indigo-400" />
-                      <span>Transcription Orale en Direct</span>
-                    </h3>
-                    <span className="text-xs text-slate-400">Speech-to-Text Continu</span>
-                  </div>
-
-                  {/* Transcript Scroll Area */}
-                  <div className="flex-grow overflow-y-auto my-4 space-y-3 pr-2 custom-scrollbar">
-                    {transcript.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3.5 rounded-xl text-sm leading-relaxed ${
-                          item.speaker === 'Élève'
-                            ? 'bg-indigo-950/60 border border-indigo-800/40 text-indigo-100 ml-6'
-                            : item.speaker === 'Système'
-                            ? 'bg-slate-900 text-slate-400 text-xs text-center border border-slate-800'
-                            : 'bg-slate-900/90 border border-slate-700 text-slate-200 mr-6'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs text-indigo-300 flex items-center space-x-1">
-                            {item.speaker !== 'Élève' && item.speaker !== 'Système' && <User className="w-3 h-3 text-emerald-400 mr-1" />}
-                            <span>{item.speaker}</span>
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono">{item.timestamp}</span>
-                        </div>
-                        <p>{item.text}</p>
-                      </div>
-                    ))}
-                    {aiGenerating && (
-                      <div className="p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-indigo-300 flex items-center space-x-2 animate-pulse">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Le jury réfléchit à sa question selon le référentiel...</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Manual Text Input / Classroom Noise Fallback */}
-                  <div className="pt-3 border-t border-slate-700 flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={userSpeechInput}
-                      onChange={(e) => setUserSpeechInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSendUserInput()}
-                      placeholder="Saisissez ou parlez au micro votre réponse..."
-                      className="flex-grow bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <button
-                      onClick={handleSendUserInput}
-                      disabled={!userSpeechInput.trim() || aiGenerating}
-                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white p-2.5 rounded-xl transition-all"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* EVALUATION RESULT PHASE */}
-            {simPhase === 'evaluation' && evalData && (
-              <div className="space-y-6">
-                
-                {/* Score Header Card */}
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
-                  
-                  {/* Score Circle */}
-                  <div className="text-center md:border-r border-slate-700 md:pr-6">
-                    <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Note Indicative</div>
-                    <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-300 font-mono">
-                      {evalData.scoreIndicative}<span className="text-2xl text-slate-500">/20</span>
-                    </div>
-                    <div className="mt-2 text-[10px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md inline-block">
-                      Indicateur d'entraînement (non officiel)
-                    </div>
-                  </div>
-
-                  {/* Summary text */}
-                  <div className="md:col-span-3 space-y-2">
-                    <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                      <Award className="w-5 h-5 text-indigo-400" />
-                      <span>Appréciation globale du jury</span>
-                    </h3>
-                    <p className="text-sm text-slate-300 leading-relaxed">
-                      {evalData.overallSummary}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Criteria Mastery Matrix */}
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
-                  <h3 className="text-md font-bold text-white">Évaluation par compétences du référentiel</h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {evalData.criteriaEvaluations.map((c, i) => (
-                      <div key={i} className="bg-slate-900/80 border border-slate-700/70 p-4 rounded-xl space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-sm text-slate-200">{c.criterionName}</span>
-                          <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border ${
-                            c.masteryLevel === 'Très satisfaisant' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
-                            c.masteryLevel === 'Satisfaisant' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
-                            c.masteryLevel === 'Fragile' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                            'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                          }`}>
-                            {c.masteryLevel}
-                          </span>
-                        </div>
-
-                        {/* Quotes / Evidence */}
-                        <div className="text-xs text-slate-400 italic bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                          "{c.evidenceQuote}"
-                        </div>
-
-                        <p className="text-xs text-slate-300 leading-relaxed">{c.feedback}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Strengths and Weaknesses Columns */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-700">
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-emerald-400 flex items-center space-x-2">
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Points forts observés</span>
-                      </h4>
-                      <ul className="space-y-1.5 text-xs text-slate-300">
-                        {evalData.strengths.map((s, i) => (
-                          <li key={i} className="flex items-start space-x-2">
-                            <span className="text-emerald-400">•</span>
-                            <span>{s}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-amber-400 flex items-center space-x-2">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Axes de progrès prioritaires</span>
-                      </h4>
-                      <ul className="space-y-1.5 text-xs text-slate-300">
-                        {evalData.improvements.map((imp, i) => (
-                          <li key={i} className="flex items-start space-x-2">
-                            <span className="text-amber-400">•</span>
-                            <span>{imp}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Restart button */}
-                  <div className="pt-4 flex justify-end">
-                    <button
-                      onClick={() => setSimPhase('setup')}
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition-all"
-                    >
-                      Nouvelle Simulation
-                    </button>
-                  </div>
-
-                </div>
-
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* TAB 2: TEACHER DASHBOARD */}
-        {activeTab === 'teacher' && (
-          <div className="space-y-6">
-            
-            {/* Header & Metrics */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-white">Tableau de Bord Enseignant</h1>
-                <p className="text-slate-400 text-sm">Suivi pédagogique et quotas de la classe Bac Pro MCV</p>
-              </div>
-
-              <button
-                onClick={() => setNewCodeModal(true)}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm transition-all flex items-center space-x-2 shadow-lg shadow-indigo-600/30"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Générer un code élève</span>
-              </button>
-            </div>
-
-            {/* Quick Analytics Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
-                <div className="text-xs text-slate-400 font-medium">Moyenne de la classe</div>
-                <div className="text-3xl font-extrabold text-white font-mono">12.3 <span className="text-sm font-normal text-slate-500">/20</span></div>
-                <div className="text-[10px] text-emerald-400 flex items-center"><TrendingUp className="w-3 h-3 mr-1" /> +0.8 pt vs semaine passée</div>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
-                <div className="text-xs text-slate-400 font-medium">Simulations réalisées</div>
-                <div className="text-3xl font-extrabold text-indigo-400 font-mono">48</div>
-                <div className="text-[10px] text-slate-400">Total sur le mois</div>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
-                <div className="text-xs text-slate-400 font-medium">Consommation API Vocal</div>
-                <div className="text-3xl font-extrabold text-purple-400 font-mono">142 <span className="text-sm font-normal text-slate-500">min</span></div>
-                <div className="text-[10px] text-slate-400">Quota classe : 300 min</div>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
-                <div className="text-xs text-slate-400 font-medium">Élèves actifs</div>
-                <div className="text-3xl font-extrabold text-emerald-400 font-mono">24 <span className="text-sm font-normal text-slate-500">/26</span></div>
-                <div className="text-[10px] text-amber-400">2 élèves en retard</div>
-              </div>
-            </div>
-
-            {/* Student Table & Management */}
-            <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
-                <h3 className="font-bold text-white">Liste des Élèves & Progression</h3>
-                <span className="text-xs text-slate-400">Référentiel E33 / U33</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-slate-900/60 text-xs uppercase text-slate-400 border-b border-slate-700">
-                    <tr>
-                      <th className="px-6 py-3">Élève</th>
-                      <th className="px-6 py-3">Code Accès</th>
-                      <th className="px-6 py-3">Temps Utilisé</th>
-                      <th className="px-6 py-3">Moyenne Note</th>
-                      <th className="px-6 py-3">Dernière simulation</th>
-                      <th className="px-6 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/50">
-                    {students.map(s => (
-                      <tr key={s.id} className="hover:bg-slate-750/50 transition-colors">
-                        <td className="px-6 py-4 font-semibold text-white">{s.name}</td>
-                        <td className="px-6 py-4 font-mono text-xs text-indigo-400">{s.code}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
-                            <span>{s.totalTime}</span>
-                            <span className="text-xs text-slate-500">/ {s.quota}m</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 font-mono font-bold text-emerald-400">{s.scoreAvg} /20</td>
-                        <td className="px-6 py-4 text-xs text-slate-400">{s.lastSim}</td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => setSelectedStudentForReview(s)}
-                            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition-all"
-                          >
-                            Détail Oral
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Individual Student Detail Modal */}
-            {selectedStudentForReview && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
-                  <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">{selectedStudentForReview.name}</h3>
-                      <p className="text-xs text-slate-400">Classe : {selectedStudentForReview.class}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedStudentForReview(null)}
-                      className="text-slate-400 hover:text-white font-bold text-xl"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div className="space-y-3 text-sm">
-                    <div className="p-3 bg-slate-900 rounded-xl border border-slate-700">
-                      <div className="text-xs font-semibold text-indigo-400 mb-1">Dernière simulation enregistrée</div>
-                      <div className="text-slate-200 font-medium">{selectedStudentForReview.lastSim}</div>
-                      <div className="text-xs text-slate-400 mt-2">Note obtenue : <strong>13.5 / 20</strong></div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Remarques de l'enseignant</h4>
-                      <textarea
-                        placeholder="Ajoutez vos commentaires personnalisés pour l'élève..."
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none h-24"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-2 pt-3 border-t border-slate-700">
-                    <button
-                      onClick={() => setSelectedStudentForReview(null)}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-xs"
-                    >
-                      Enregistrer
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* New Code Modal */}
-            {newCodeModal && (
-              <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-                  <h3 className="text-lg font-bold text-white">Générer un Code Accès Élève</h3>
-                  <p className="text-xs text-slate-400">Ce code permettra à un nouvel élève d'accéder aux simulations sans compte nominatif.</p>
-
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Nom de l'élève"
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none">
-                      <option>Terminales Bac Pro MCV</option>
-                      <option>BTS MCO 2</option>
-                      <option>BTS NDRC 1</option>
-                    </select>
-                  </div>
-
-                  <div className="flex justify-end space-x-2 pt-3 border-t border-slate-700">
-                    <button onClick={() => setNewCodeModal(false)} className="px-4 py-2 bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold">Annuler</button>
-                    <button onClick={() => setNewCodeModal(false)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold">Générer Code</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* TAB 3: DIPLOMA & SCENARIO CUSTOMIZER */}
-        {activeTab === 'customizer' && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold text-white">Moteur de Scénarios & Diplômes</h1>
-              <p className="text-slate-400 text-sm">Paramétrez les critères d'évaluation et le comportement du jury IA selon le référentiel</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left Column: Diploma Presets */}
-              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
-                <h3 className="text-md font-bold text-white flex items-center space-x-2">
-                  <BookOpen className="w-5 h-5 text-indigo-400" />
-                  <span>Diplômes pré-paramétrés</span>
-                </h3>
-
-                <div className="space-y-2">
-                  {DIPLOMA_CONFIGS.map(d => (
-                    <button
-                      key={d.id}
-                      onClick={() => setSelectedDiploma(d)}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all ${
-                        selectedDiploma.id === d.id 
-                          ? 'bg-indigo-600/20 border-indigo-500 text-white' 
-                          : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="font-bold text-sm">{d.code}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{d.title}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Column: Custom Prompt & Variable Tuning */}
-              <div className="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
-                <h3 className="text-md font-bold text-white flex items-center space-x-2">
-                  <Cpu className="w-5 h-5 text-indigo-400" />
-                  <span>Prompt Système & Variables Dynamiques</span>
-                </h3>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Consigne Système du Jury IA (Prompt Pédagogique)
-                    </label>
-                    <textarea
-                      value={customPrompts.systemInstruction}
-                      onChange={(e) => setCustomPrompts({ ...customPrompts, systemInstruction: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none h-28 font-mono leading-relaxed"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                        Exigence des Objections
-                      </label>
-                      <select
-                        value={customPrompts.objectionStrictness}
-                        onChange={(e) => setCustomPrompts({ ...customPrompts, objectionStrictness: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      >
-                        <option value="Low">Indulgent (Débutant)</option>
-                        <option value="Medium">Standard Examen</option>
-                        <option value="High">Très Exigeant (Élite)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                        Personnalité du Client / Jury
-                      </label>
-                      <input
-                        type="text"
-                        value={customPrompts.clientPersonality}
-                        onChange={(e) => setCustomPrompts({ ...customPrompts, clientPersonality: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Rubric Configuration Display */}
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-300 mb-2">Grille d'évaluation officielle du diplôme :</h4>
-                    <div className="space-y-2">
-                      {selectedDiploma.rubrics.map((r) => (
-                        <div key={r.id} className="flex justify-between items-center p-3 bg-slate-900/60 rounded-xl border border-slate-700/60 text-xs">
-                          <span className="text-slate-200 font-medium">{r.name}</span>
-                          <span className="font-mono text-indigo-400 font-bold">Barème / {r.max} pts</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      onClick={() => alert('Configuration des promps enregistrée avec succès !')}
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-lg shadow-indigo-600/30"
-                    >
-                      Enregistrer le scénario
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-      </main>
-    </div>
-  );
 }
+
+function RULES(s) {
+  if (s.type === "examen") {
+    return `Tu joues le jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
+
+CE JURY EST COMPOSÉ DE DEUX PERSONNES DISTINCTES, comme le veut le référentiel officiel — tu incarnes les deux, en alternant naturellement selon qui a la question la plus pertinente à poser :
+- LE / LA PROFESSEUR(E) D'ÉCONOMIE-GESTION : se concentre sur la rigueur méthodologique du diagnostic, la structuration de la démarche, le lien avec les notions du programme (sources d'information, SIC, SWOT).
+- LE / LA PROFESSIONNEL(LE) DU SECTEUR COMMERCE/VENTE : se concentre sur le réalisme terrain — est-ce que ça tiendrait vraiment dans une vraie entreprise, la faisabilité concrète des actions proposées, l'expérience pratique du candidat au quotidien.
+Ne fais jamais parler les deux en même temps dans une réplique : chaque réplique est UNE question posée par UN SEUL des deux membres, identifié par le champ "membre" de ta réponse JSON. Alterne entre les deux au fil de l'entretien plutôt que de laisser un seul membre monopoliser la parole, et ne redonne jamais la parole immédiatement au même membre qui vient de parler sauf s'il relance sur une réponse incomplète.
+
+L'ÉLÈVE VIENT DE FAIRE SA PRÉSENTATION ORALE DE 10 MINUTES SANS INTERRUPTION (elle t'a été transmise intégralement dans le premier message ci-dessous, entre crochets). Tu ne l'as pas coupée pendant qu'elle parlait — c'est seulement maintenant que commence l'entretien de 10 minutes.
+
+LA PRÉSENTATION ATTENDUE DE L'ÉLÈVE SUIT NORMALEMENT CETTE PROGRESSION (d'après les trames académiques officielles) — sers-t'en pour repérer ce qui a été traité ou survolé :
+PARTIE 1 — LE DIAGNOSTIC DE L'ENTREPRISE :
+1. Présentation de l'enseigne (identité, forme juridique, effectif, surface de vente...)
+2. Assortiment (produits et services)
+3. Profil de la clientèle
+4. La politique commerciale de l'enseigne
+5. La concurrence
+6. La zone de chalandise
+7. Les outils numériques et outils actuels de fidélisation / relation client déjà en place
+8. Le SWOT — bilan du diagnostic (forces / faiblesses de la FDRC existante)
+PARTIE 2 — LES PROPOSITIONS :
+9. Les DEUX actions de FDRC proposées, chacune avec sa cible et ses objectifs.
+(Le planning détaillé, le budget précis et la répartition des tâches relèvent normalement de la "feuille de route" écrite qui suit cette situation 1, pas d'un développement oral complet — n'exige pas ces détails chiffrés comme une présentation orale mais tu peux demander si l'élève y a réfléchi.)
+
+CE QUE TU DOIS ÉVALUER PENDANT L'ENTRETIEN (grille officielle E33 Situation 1) :
+1. Pertinence du choix des sources d'information et des données recueillies (sources internes comme le SIC, sources externes, fiabilité, utilité pour la FDRC).
+2. Qualité du traitement des sollicitations clients : l'élève doit pouvoir expliciter sa propre contribution concrète à la fidélisation dans ses actions du quotidien.
+3. Pertinence des actions proposées : l'élève DOIT avoir proposé DEUX actions de FDRC. Si une seule action a été présentée, ou si aucune, ou si elles semblent peu cohérentes avec le contexte et la stratégie commerciale de l'entreprise, challenge-le précisément là-dessus.
+4. Cohérence du choix des outils de fidélisation avec le contexte : c'est le critère le plus exigeant — vérifie que les actions proposées découlent logiquement du diagnostic (profil clientèle, concurrence, zone de chalandise, SWOT). Si l'élève a présenté un diagnostic complet mais que ses actions ne s'appuient pas dessus, ou si le diagnostic a été survolé sans lien clair avec les actions, challenge-le précisément là-dessus.
+
+RÈGLES :
+- Tu es UNIQUEMENT l'examinateur. Ne donne jamais la réponse, ne sors jamais du rôle.
+- RÈGLE DE PRIORITÉ ABSOLUE, À VÉRIFIER AVANT CHAQUE RÉPLIQUE : passe en revue mentalement les 8 points du diagnostic (partie 1). Si la présentation de l'élève a été sommaire, rapide, ou n'a pas clairement traité au moins 5 de ces 8 points (l'entreprise, l'assortiment, la clientèle, la politique commerciale, la concurrence, la zone de chalandise, les outils actuels, le SWOT), tu DOIS consacrer tes 2 à 3 premières questions à combler ces trous du diagnostic — jamais interroger sur la pertinence ou la cohérence des actions proposées tant que le diagnostic reste flou, puisque tu ne peux pas juger une cohérence que tu n'as pas les moyens de vérifier. Ne passe aux questions sur les actions (partie 2) qu'une fois le contexte suffisamment établi, par la présentation initiale ou par tes propres questions.
+- Ta toute première réplique doit réagir en une phrase à la présentation (sans la résumer ni la commenter en détail), puis poser IMMÉDIATEMENT ta première question — en respectant la règle de priorité ci-dessus.
+- Tu parles à l'oral : phrases courtes et naturelles, 1 à 2 questions maximum par réplique.
+- Pose des questions précises qui challengent les choix de l'élève sur SA propre présentation — jamais de question générique déconnectée de ce qu'il vient de dire.
+- Une fois le diagnostic suffisamment établi, vérifie explicitement que les DEUX actions de FDRC ont bien été proposées et découlent logiquement de ce diagnostic — si ce lien n'est pas clair, demande-le directement.
+- Reste professionnel, exigeant mais bienveillant, comme un vrai examinateur.
+- REGISTRE ORAL (s'applique UNIQUEMENT au texte à l'intérieur du champ "replique") : tu parles, tu n'écris pas. Des phrases courtes, parfois inachevées ou reprises en cours de route, des hésitations légères ("bon", "donc", "alors"), des tournures orales ("vous m'avez dit que...", pas "vous avez indiqué que..."). Jamais plus d'une idée bien construite par phrase — évite les répliques trop propres, trop écrites, qui alignent plusieurs phrases parfaites d'affilée.
+- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Réagis toujours à ce que le candidat vient de dire, même si c'est bref, hors sujet ou maladroit.
+- Ne fais pas passer "etat" à "conclu" avant d'avoir réellement couvert au moins 3 des 4 points de la grille (au moins 5 à 7 vrais échanges de fond) — jamais à cause d'une seule réponse creuse.
+
+FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
+{"replique": "ta réplique à l'oral", "membre": "professeur" | "professionnel", "etat": "en_cours" | "conclu"}
+
+Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSegments.map(seg => `[${seg.membre}] "${seg.text}"`).join(" ")}`;
+  }
+  return `Tu joues un rôle dans un simulateur d'entraînement à la vente pour des élèves de lycée professionnel (Bac Pro commerce / relation client).
+
+TON PERSONNAGE :
+${s.persona}
+
+RÈGLES :
+- Tu es UNIQUEMENT le client. Ne donne jamais de conseil de vente, ne sors jamais du rôle.
+- Tu parles à l'oral : phrases courtes et naturelles, 1 à 3 phrases maximum par réplique.
+- Ne cède pas trop vite : un bon vendeur doit te poser des questions, t'écouter, argumenter et traiter tes objections.
+- Si le vendeur est bref, vague, maladroit ou hors sujet, réagis comme un vrai client le ferait sur le moment (surprise, agacement léger, demande de clarification) — mais CONTINUE la scène, ne l'arrête pas pour autant.
+- REGISTRE ORAL (s'applique UNIQUEMENT au texte à l'intérieur du champ "replique") : tu parles, tu n'écris pas. Phrases courtes, parfois coupées ou reprises en cours de route ("Non mais... c'est pas ce que je demande"), contractions naturelles à l'oral ("j'sais pas", "c'est pas", "t'as"), petites hésitations ("euh", "bon", "enfin"). Une réaction émotionnelle tient souvent en 3 à 6 mots, pas en une phrase entière bien construite. Évite d'aligner plusieurs phrases parfaites et complètes à la suite — ça sonne écrit, pas parlé.
+- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Fais toujours avancer la conversation d'une phrase au moins.
+- Ne fais passer "etat" à "conclu" ou "parti" que sur une décision claire et méritée (après un minimum de 5 à 6 échanges avec de vrais arguments échangés) — jamais à cause d'une seule réponse creuse, brève ou hors sujet du vendeur : dans ce cas, montre plutôt ton agacement ou ta perplexité et repose ta question, sans clore la scène.
+
+FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
+{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu" | "parti"}
+
+Ta première réplique a déjà été dite : "${s.opening}"
+Le vendeur va maintenant te répondre.`;
+}
+
+/* ---------- Éléments ---------- */
+const $ = (id) => document.getElementById(id);
+const screens = { setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief") };
+function showScreen(name) {
+  for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
+  window.scrollTo(0, 0);
+}
+
+let scenario = null;
+let turns = [];
+let busy = false;
+let finished = false;
+let lastClientLine = "";
+let lastMembre = null;
+
+/* ---------- Voix : Azure en priorité, navigateur en secours automatique ---------- */
+let voicesReady = new Promise(resolve => {
+  if (!("speechSynthesis" in window)) return resolve();
+  if (speechSynthesis.getVoices().length) return resolve();
+  speechSynthesis.onvoiceschanged = () => resolve();
+  setTimeout(resolve, 2500);
+});
+const FEMALE = /denise|vivienne|eloise|brigitte|coralie|jacqueline|yvette|julie|hortense|charline|sylvie|ariane|amelie|am[ée]lie|marie|léa|lea/i;
+const MALE = /henri|remy|rémy|alain|claude|jerome|jérôme|maurice|yves|gerard|gérard|fabrice|paul|thomas|antoine|guillaume/i;
+function pickVoice(gender) {
+  const all = speechSynthesis.getVoices().filter(v => (v.lang || "").toLowerCase().startsWith("fr"));
+  const natural = all.filter(v => /natural|online|neural/i.test(v.name));
+  const pool = natural.length ? natural : all;
+  const fr = pool.filter(v => /fr-fr/i.test(v.lang));
+  const base = fr.length ? fr : pool;
+  const re = gender === "female" ? FEMALE : MALE;
+  return base.find(v => re.test(v.name)) || base[0] || null;
+}
+
+let currentAudio = null;
+let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
+
+function speakBrowser(text, gender) {
+  return new Promise(resolve => {
+    if (!("speechSynthesis" in window)) return resolve();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice(gender || scenario.gender);
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "fr-FR"; }
+    u.rate = 1.02;
+    u.onend = resolve; u.onerror = resolve;
+    speechSynthesis.speak(u);
+  });
+}
+
+async function speak(text, genderOverride) {
+  stopSpeaking();
+  const gender = genderOverride || scenario.gender;
+  if (!azureUnavailable) {
+    try {
+      const r = await fetch("/api/speech", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: studentCode, text, gender })
+      });
+      if (!r.ok) throw new Error("azure_indisponible");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      currentAudio = new Audio(url);
+      await new Promise(resolve => {
+        currentAudio.onended = resolve;
+        currentAudio.onerror = resolve;
+        currentAudio.play().catch(resolve);
+      });
+      URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
+    }
+  }
+  await speakBrowser(text, gender);
+}
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+}
+
+/* ---------- Affichage ---------- */
+function addMsg(kind, text, membre) {
+  const div = document.createElement("div");
+  div.className = "msg " + kind;
+  if (kind !== "note") {
+    const who = document.createElement("small");
+    if (kind === "client") {
+      who.textContent = membre
+        ? (membre === "professeur" ? "Le jury — professeur(e)" : "Le jury — professionnel(le)")
+        : scenario.aiLabel;
+    } else {
+      who.textContent = "Vous";
+    }
+    div.appendChild(who);
+  }
+  div.appendChild(document.createTextNode(text));
+  $("chat").appendChild(div);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+function setStatus(text, isError) {
+  $("status").textContent = text || "";
+  $("status").classList.toggle("err", !!isError);
+}
+function setBusy(b) {
+  busy = b;
+  $("sendBtn").disabled = b || finished;
+  $("micBtn").disabled = b || finished || !recognition;
+  $("input").disabled = b || finished;
+}
+
+/* ---------- Appels au serveur (clé API cachée côté serveur) ---------- */
+function errorText(err) {
+  const code = err && err.code;
+  return ({
+    code_invalide: "Session expirée. Rechargez la page et reconnectez-vous.",
+    quota_depasse: "Temps hebdomadaire épuisé. Réessayez la semaine prochaine.",
+    no_api_key: "Le serveur n'est pas encore configuré (clé API manquante). Prévenez votre professeur.",
+    anthropic_error: "Le service est momentanément indisponible. Réessayez dans un instant.",
+    reponse_invalide: "Réponse inattendue. Renvoyez votre phrase.",
+    requete_invalide: "Une information manquait. Renvoyez votre phrase.",
+  })[code] || "Une erreur est survenue. Réessayez dans un instant.";
+}
+
+async function apiTurn(messages) {
+  const r = await fetch("/api/turn", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: studentCode, messages })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
+  return data; // {replique, etat}
+}
+async function apiEvaluate(prompt) {
+  const r = await fetch("/api/evaluate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code: studentCode, prompt })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
+  return data.text;
+}
+async function refreshQuota() {
+  try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
+}
+
+async function sellerSays(text) {
+  text = text.trim();
+  if (!text || busy || finished) return;
+
+  stopSpeaking();
+  addMsg("seller", text);
+  turns.push({ role: "user", content: text });
+  $("input").value = "";
+  setBusy(true);
+  setStatus(scenario.type === "examen" ? "⏳ Le jury réfléchit…" : "⏳ Le client réfléchit…");
+
+  try {
+    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
+    const res = await apiTurn(messages);
+    const line = String(res.replique || "").trim();
+    const etat = res.etat || "en_cours";
+    if (!line) throw { code: "reponse_invalide" };
+
+    turns.push({ role: "assistant", content: line });
+    lastClientLine = line;
+    const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
+    lastMembre = membre;
+    addMsg("client", line, membre);
+    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setBusy(false);
+    refreshQuota();
+    if (etat === "conclu" || etat === "parti") { finished = true; setBusy(false); }
+    await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
+    if (finished) {
+      addMsg("note", scenario.type === "examen" ? "L'oral est terminé."
+        : (etat === "conclu" ? "Le client a pris sa décision : vente conclue." : "Le client est parti sans acheter."));
+      setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
+    } else {
+      setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+    }
+  } catch (e) {
+    turns.pop();
+    $("input").value = text;
+    $("chat").lastChild && $("chat").lastChild.remove();
+    setBusy(false);
+    setStatus(errorText(e), true);
+  }
+}
+
+async function evaluate() {
+  stopSpeaking();
+  if (recognition && listening) recognition.stop();
+  showScreen("debrief");
+  const box = $("debrief");
+  const sellerTurns = turns.filter(t => t.role === "user").length;
+  if (sellerTurns < 2) {
+    box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
+    return;
+  }
+  const openingLines = scenario.type === "examen"
+    ? scenario.openingSegments.map(seg => "LE JURY (" + seg.membre.toUpperCase() + ") : " + seg.text)
+    : [(scenario.aiLabel + " : ") + scenario.opening];
+  const transcript = openingLines
+    .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
+    .join("\n");
+
+  const prompt = scenario.type === "examen" ? `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
+
+Transcription complète (présentation puis entretien) :
+${transcript}
+
+GRILLE OFFICIELLE À APPLIQUER (4 critères, chacun noté sur 5, note globale sur 20) :
+1. Pertinence du choix des sources d'information et qualité du traitement des sollicitations clients.
+2. Pertinence des actions proposées — vérifie explicitement si DEUX actions de FDRC ont été formulées, chacune avec une cible et des objectifs. Une seule action, ou des actions vagues, plafonne ce critère à 2/5 maximum ; aucune action proposée plafonne à 1/5.
+3. Cohérence du choix des outils de fidélisation avec le contexte — le critère le plus exigeant : les actions découlent-elles logiquement du diagnostic présenté (profil clientèle, concurrence, zone de chalandise, SWOT) ? Un diagnostic complet mais déconnecté des actions choisies, ou un diagnostic survolé, plafonne ce critère à 2/5 maximum.
+4. Maîtrise du dossier pendant l'entretien (réactivité, justesse des réponses aux questions du jury, capacité à approfondir chaque partie du diagnostic).
+
+RÈGLES DE NOTATION :
+- N'attribue jamais le maximum sur un critère sans une preuve précise et citable dans la transcription.
+- La moyenne réaliste d'un candidat moyen tourne autour de 10 à 12/20 ; réserve 16 et plus aux prestations qui remplissent véritablement les 4 critères à un niveau expert.
+- Justifie chaque note par un élément concret que l'élève a réellement dit, jamais par une impression générale.
+
+Rédige l'évaluation en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+
+NOTE GLOBALE : x/20
+
+CRITÈRES DE LA GRILLE E33
+Sources d'information et traitement des sollicitations clients : x/5 — une phrase citant un élément précis
+Pertinence des deux actions de FDRC proposées : x/5 — une phrase précisant si les deux actions ont bien été identifiées
+Cohérence des outils de fidélisation avec le contexte (diagnostic) : x/5 — une phrase précisant si les actions découlent du diagnostic
+Maîtrise du dossier pendant l'entretien : x/5 — une phrase
+
+TES POINTS FORTS
+- 2 points précis, en citant tes propres réponses
+
+À AMÉLIORER
+- 2 ou 3 points précis, avec pour chacun une reformulation que tu aurais pu donner
+
+CONSEIL POUR LA PROCHAINE FOIS
+Une seule phrase.` : `Tu es professeur de vente en lycée professionnel (Bac Pro Métiers du commerce et de la vente). Évalue l'élève qui jouait le VENDEUR dans cette simulation.
+
+Situation : ${scenario.title} — ${scenario.summary}
+
+Transcription :
+${transcript}
+
+Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+
+NOTE GLOBALE : x/20
+
+ÉTAPES DE LA VENTE
+Accueil et prise de contact : x/4 — une phrase de justification
+Découverte des besoins : x/4 — une phrase
+Argumentation : x/4 — une phrase
+Traitement des objections : x/4 — une phrase
+Conclusion de la vente : x/4 — une phrase
+
+TES POINTS FORTS
+- 2 points précis, en citant tes propres phrases
+
+À AMÉLIORER
+- 2 ou 3 points précis, avec pour chacun une phrase que tu aurais pu dire à la place
+
+CONSEIL POUR LA PROCHAINE FOIS
+Une seule phrase.`;
+
+  box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
+  try {
+    box.textContent = await apiEvaluate(prompt);
+    refreshQuota();
+  } catch (e) {
+    box.textContent = errorText(e);
+  }
+}
+
+/* ---------- Micro (écoute continue, robuste au bruit de classe) ----------
+   Deux modes partagent le même moteur de reconnaissance :
+   - "chat"         : une réplique à la fois (entretien), comme avant.
+   - "presentation" : accumulation longue (jusqu'à 10 minutes), sans jamais
+                      envoyer quoi que ce soit à l'IA — on écrit juste dans
+                      la zone de texte de la présentation. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+let micMode = "chat";
+const MAX_RESTARTS = { chat: 6, presentation: 60 };
+let finalText = "";
+let presBase = "";
+let userStopped = false;
+let autoRestarts = 0;
+let hadError = false;
+if (SR) {
+  recognition = new SR();
+  recognition.lang = "fr-FR";
+  recognition.interimResults = true;
+  recognition.continuous = true;
+
+  recognition.onstart = () => {
+    listening = true;
+    if (micMode === "presentation") {
+      $("presMicBtn").classList.add("listening");
+      $("presStatus").textContent = "🔴 Je vous écoute…";
+    } else {
+      $("micBtn").classList.add("listening");
+      setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
+    }
+  };
+  recognition.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
+      else interim += e.results[i][0].transcript;
+    }
+    if (micMode === "presentation") {
+      $("presTranscript").value = (presBase + finalText + interim).trim();
+    } else {
+      $("input").value = (finalText + interim).trim();
+    }
+  };
+  recognition.onerror = (e) => {
+    hadError = true;
+    if (e.error === "no-speech") { hadError = false; return; }
+    const msg = {
+      "not-allowed": "Le micro est bloqué. Répondez au clavier.",
+      "service-not-allowed": "Le micro est bloqué. Répondez au clavier.",
+      "audio-capture": "Aucun micro détecté. Répondez au clavier.",
+      "network": "Reconnaissance vocale indisponible. Répondez au clavier."
+    }[e.error];
+    if (msg) {
+      userStopped = true;
+      if (micMode === "presentation") $("presStatus").textContent = msg; else setStatus(msg, true);
+    }
+  };
+  recognition.onend = () => {
+    listening = false;
+    $("micBtn").classList.remove("listening");
+    $("presMicBtn") && $("presMicBtn").classList.remove("listening");
+    if (!userStopped && autoRestarts < MAX_RESTARTS[micMode]) {
+      autoRestarts++;
+      try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
+    }
+    autoRestarts = 0;
+    if (micMode === "chat") {
+      const said = $("input").value.trim();
+      if (said && !hadError) sellerSays(said);
+    } else if (micMode === "presentation") {
+      $("presStatus").textContent = "";
+    }
+    hadError = false;
+  };
+
+  $("micBtn").onclick = () => {
+    if (busy || finished) return;
+    if (listening) { userStopped = true; recognition.stop(); return; }
+    stopSpeaking();
+    micMode = "chat";
+    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    $("input").value = "";
+    setStatus("");
+    try { recognition.start(); } catch (err) { setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
+  };
+  $("presMicBtn").onclick = () => {
+    if (listening) { userStopped = true; recognition.stop(); return; }
+    micMode = "presentation";
+    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    presBase = $("presTranscript").value ? $("presTranscript").value.trim() + " " : "";
+    $("presStatus").textContent = "";
+    try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
+  };
+} else {
+  $("micBtn").onclick = () => {};
+  $("presMicBtn").onclick = () => {};
+  $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
+}
+
+/* ---------- Démarrage ---------- */
+function renderScenarios() {
+  const listVente = $("scenarioListVente");
+  for (const s of SALES_SCENARIOS) {
+    const b = document.createElement("button");
+    b.className = "scenario";
+    const t = document.createElement("strong"); t.textContent = s.title;
+    const d = document.createElement("span"); d.textContent = s.summary;
+    b.append(t, d);
+    b.onclick = () => start(s);
+    listVente.appendChild(b);
+  }
+  const listExamen = $("scenarioListExamen");
+  for (const tpl of EXAM_TEMPLATES) {
+    const b = document.createElement("button");
+    b.className = "scenario";
+    const t = document.createElement("strong"); t.textContent = tpl.title;
+    const d = document.createElement("span"); d.textContent = tpl.summary;
+    b.append(t, d);
+    b.onclick = () => { pendingTemplate = tpl; showScreen("prep"); };
+    listExamen.appendChild(b);
+  }
+}
+let pendingTemplate = null;
+$("prepStartBtn").onclick = () => {
+  start(buildExamScenario(pendingTemplate, $("prepGenderProf").value, $("prepGenderPro").value));
+};
+$("prepBackBtn").onclick = () => showScreen("setup");
+
+/* ---------- Phase 1 : présentation chronométrée (E33), sans intervention du jury ---------- */
+let presTimerId = null;
+let presRemaining = 600;
+let presentationDone = false;
+
+function updatePresTimerDisplay() {
+  const r = Math.max(presRemaining, 0);
+  const m = Math.floor(r / 60), sec = r % 60;
+  $("presTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
+  $("presTimer").classList.toggle("urgent", r <= 60);
+}
+
+function beginPresentationPhase() {
+  presentationDone = false;
+  $("presTranscript").value = "";
+  $("presStatus").textContent = "";
+  presRemaining = 600;
+  updatePresTimerDisplay();
+  showScreen("presentation");
+  clearInterval(presTimerId);
+  presTimerId = setInterval(() => {
+    presRemaining--;
+    updatePresTimerDisplay();
+    if (presRemaining <= 0) finishPresentation();
+  }, 1000);
+}
+
+async function finishPresentation() {
+  if (presentationDone) return;
+  presentationDone = true;
+  clearInterval(presTimerId);
+  if (listening) { userStopped = true; recognition.stop(); }
+
+  const presentationText = $("presTranscript").value.trim();
+  showScreen("chat");
+  $("scenarioTitle").textContent = scenario.title;
+  addMsg("seller", presentationText || "(aucune présentation enregistrée)");
+  setBusy(true);
+  setStatus("⏳ Le jury réfléchit…");
+
+  turns = [{
+    role: "user",
+    content: "[PRÉSENTATION ORALE COMPLÈTE DE L'ÉLÈVE — 10 MINUTES, TRANSCRITE EN UN SEUL BLOC, NE PAS INTERROMPRE NI DEMANDER À L'ÉLÈVE DE RÉPÉTER CE QU'IL VIENT DE DIRE] "
+      + (presentationText || "(l'élève n'a rien dit ou le micro n'a pas fonctionné : signale-le-lui avec bienveillance et invite-le à décrire quand même sa situation à l'oral maintenant.)")
+  }];
+
+  try {
+    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
+    const res = await apiTurn(messages);
+    const line = String(res.replique || "").trim();
+    if (!line) throw { code: "reponse_invalide" };
+    turns.push({ role: "assistant", content: line });
+    lastClientLine = line;
+    const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
+    lastMembre = membre;
+    addMsg("client", line, membre);
+    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setBusy(false);
+    refreshQuota();
+    await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
+    if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+    $("input").focus();
+  } catch (e) {
+    setBusy(false);
+    setStatus(errorText(e), true);
+  }
+}
+
+async function start(s) {
+  scenario = s; turns = []; finished = false; lastClientLine = s.opening;
+  $("chat").innerHTML = "";
+  $("scenarioTitle").textContent = s.title;
+  showScreen("chat");
+  setBusy(false);
+  if (!recognition) $("micBtn").title = "Micro non disponible dans ce navigateur";
+  await voicesReady;
+
+  if (s.type === "examen") {
+    for (const seg of s.openingSegments) {
+      addMsg("client", seg.text, seg.membre);
+      lastClientLine = seg.text;
+      lastMembre = seg.membre;
+      setStatus("🔊 Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
+      await speak(seg.text, s.genderByMembre[seg.membre]);
+    }
+    beginPresentationPhase();
+    return;
+  }
+
+  addMsg("client", s.opening);
+  lastClientLine = s.opening;
+  lastMembre = null;
+  setStatus("🔊 " + s.aiLabel + " parle…");
+  await speak(s.opening);
+  if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+  $("input").focus();
+}
+
+$("sendBtn").onclick = () => sellerSays($("input").value);
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
+$("replayBtn").onclick = () => {
+  if (!lastClientLine) return;
+  const gender = lastMembre && scenario.genderByMembre ? scenario.genderByMembre[lastMembre] : undefined;
+  speak(lastClientLine, gender);
+};
+$("endBtn").onclick = evaluate;
+$("presDoneBtn").onclick = finishPresentation;
+$("quitBtn").onclick = () => {
+  stopSpeaking();
+  clearInterval(presTimerId);
+  if (listening) { userStopped = true; recognition.stop(); }
+  showScreen("setup");
+};
+$("againBtn").onclick = () => showScreen("setup");
+
+renderScenarios();
+</script>
+</body>
+</html>

@@ -17,6 +17,8 @@ const WARNING_THRESHOLD_MINUTES = Number(process.env.WARNING_THRESHOLD_MINUTES |
 // Si absent, tout continue de fonctionner normalement, juste sans historique.
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
+// Mot de passe pour la page enseignant (gestion des élèves sans passer par GitHub).
+const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "ORT2026";
 // Voix OpenAI (facultatif) : si absent, le navigateur utilise sa propre voix.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
@@ -47,7 +49,12 @@ function loadUsage() {
   try { return JSON.parse(fs.readFileSync(USAGE_FILE, "utf8")); } catch { return {}; }
 }
 function saveUsage(u) {
-  fs.writeFileSync(USAGE_FILE, JSON.stringify(u, null, 2));
+  // Écriture atomique : on écrit dans un fichier temporaire puis on le
+  // renomme, pour ne jamais laisser un fichier à moitié écrit en cas de
+  // plantage pile pendant la sauvegarde.
+  const tmp = USAGE_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
+  fs.renameSync(tmp, USAGE_FILE);
 }
 function monthKey(d = new Date()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -73,16 +80,106 @@ const app = express();
 app.use(express.json({ limit: "200kb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-function requireStudent(req, res, next) {
+/* ---------- Élèves : Supabase en priorité, fichier CSV en secours ---------- */
+function supabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
+}
+async function findStudentInSupabase(code) {
+  if (!supabaseConfigured()) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}&active=eq.true&select=code,nom`,
+      { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows[0] || null;
+  } catch (e) {
+    console.error("Erreur lecture élève Supabase:", e && e.message);
+    return null; // en cas de souci réseau, on retombe sur le CSV plutôt que de bloquer l'élève
+  }
+}
+
+async function requireStudent(req, res, next) {
   const code = String(req.body.code || req.query.code || "").trim();
-  const students = loadStudents();
-  if (!code || !students.has(code)) {
+  if (!code) return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
+
+  const fromSupabase = await findStudentInSupabase(code);
+  if (fromSupabase) {
+    req.studentCode = code;
+    req.studentName = fromSupabase.nom;
+    return next();
+  }
+
+  const students = loadStudents(); // repli : ancien fichier CSV
+  if (!students.has(code)) {
     return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
   }
   req.studentCode = code;
   req.studentName = students.get(code);
   next();
 }
+
+/* ---------- Espace enseignant : ajouter des élèves sans passer par GitHub ---------- */
+function checkTeacherPassword(req, res) {
+  const password = String(req.body.password || req.query.password || "");
+  if (password !== TEACHER_PASSWORD) {
+    res.status(401).json({ error: "mot_de_passe_invalide", message: "Mot de passe enseignant incorrect." });
+    return false;
+  }
+  return true;
+}
+
+async function generateUniqueCode() {
+  for (let i = 0; i < 20; i++) {
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const existing = await findStudentInSupabase(code);
+    if (!existing) return code;
+  }
+  throw new Error("Impossible de générer un code unique après 20 essais.");
+}
+
+app.get("/api/teacher/students", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students?select=code,nom,classe,active,created_at&order=created_at.desc`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger la liste des élèves." });
+  }
+});
+
+app.post("/api/teacher/students", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });
+  const nom = String(req.body.nom || "").trim().slice(0, 120);
+  const classe = String(req.body.classe || "").trim().slice(0, 80);
+  if (!nom) return res.status(400).json({ error: "requete_invalide", message: "Le nom est obligatoire." });
+
+  try {
+    const code = await generateUniqueCode();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=representation"
+      },
+      body: JSON.stringify({ code, nom, classe: classe || null, active: true })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const rows = await r.json();
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error("Erreur création élève:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de créer l'élève." });
+  }
+});
 
 app.get("/api/status", requireStudent, (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);

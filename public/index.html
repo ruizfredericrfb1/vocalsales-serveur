@@ -97,7 +97,7 @@
   button:disabled { opacity: .5; cursor: not-allowed; }
   button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
   button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
-  #micBtn { min-width: 64px; font-size: 1.4rem; }
+  #micBtn { min-width: 64px; font-size: 1.4rem; touch-action: none; user-select: none; -webkit-user-select: none; }
 
   .timer {
     font-size: 2.4rem; font-weight: 700; text-align: center;
@@ -147,12 +147,8 @@
       <span class="quota" id="quota"></span>
     </div>
 
-    <!-- Écran 1 : choix du mode / scénario -->
+    <!-- Écran 1 : choix du scénario -->
     <section id="screenSetup">
-      <h2 class="group-title">S'entraîner à la vente</h2>
-      <p class="group-hint">Le client parlera en premier : répondez au micro ou au clavier.</p>
-      <div class="scenarios" id="scenarioListVente"></div>
-
       <h2 class="group-title">Se préparer à un oral d'examen</h2>
       <p class="group-hint">Un jury vous interroge sur une situation de vente que vous avez préparée.</p>
       <div class="scenarios" id="scenarioListExamen"></div>
@@ -205,7 +201,7 @@
       <div class="chat" id="chat" aria-live="polite"></div>
       <div class="status" id="status"></div>
       <div class="reply">
-        <button id="micBtn" title="Répondre au micro" aria-label="Répondre au micro">🎙️</button>
+        <button id="micBtn" title="Maintenir appuyé pour répondre" aria-label="Maintenir appuyé pour répondre au micro">🎙️</button>
         <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
         <button id="sendBtn">Envoyer</button>
       </div>
@@ -264,30 +260,7 @@ document.getElementById("codeInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("loginBtn").click();
 });
 
-/* ---------- Scénarios de négociation ---------- */
-const SALES_SCENARIOS = [
-  {
-    id: "casque", type: "vente", title: "Le casque audio",
-    summary: "Magasin d'électronique. Un client exigeant cherche un casque pour le métro.",
-    aiLabel: "Client", gender: "male",
-    opening: "Bonjour. Je cherche un bon casque audio pour mes trajets quotidiens dans le métro. Vous me conseillez quel modèle ?",
-    persona: "Tu es Karim, 34 ans, cadre, client dans un magasin d'électronique à Marseille. Tu prends le métro 1 h par jour. Budget réel : 150 € maximum, mais tu ne le dis que si le vendeur te pose la question. Tu as vu des casques moins chers sur internet et tu hésites. Tes objections possibles : le prix, l'autonomie de la batterie, le confort sur la durée, la comparaison avec internet. Tu es exigeant mais correct."
-  },
-  {
-    id: "running", type: "vente", title: "Les chaussures de running",
-    summary: "Magasin de sport. Une cliente débutante hésite et connaît mal le produit.",
-    aiLabel: "Client", gender: "female",
-    opening: "Bonjour… Je voudrais commencer à courir, mais je ne sais pas du tout quelles chaussures prendre.",
-    persona: "Tu es Sophie, 45 ans, cliente dans un magasin de sport. Tu veux te mettre à la course à pied deux fois par semaine, sur route. Tu n'y connais rien, tu as peur de te faire mal aux genoux et de dépenser pour rien si tu abandonnes. Budget : 80 à 100 €. Tu es hésitante et tu poses des questions simples."
-  },
-  {
-    id: "reclamation", type: "vente", title: "La réclamation",
-    summary: "Service client. Un client mécontent : sa commande a une semaine de retard.",
-    aiLabel: "Client", gender: "male",
-    opening: "Oui bonjour, alors je vous appelle parce que ça fait une semaine que j'attends ma commande, et personne n'est capable de me dire où elle est !",
-    persona: "Tu es Monsieur Lopez, 58 ans. Tu as commandé un canapé en ligne, livraison prévue il y a 7 jours, toujours rien. Tu as déjà appelé deux fois sans réponse claire. Tu es énervé au début, mais tu te calmes si le conseiller t'écoute vraiment, reformule ton problème et te propose une solution concrète. Si on te répond de façon vague ou qu'on te coupe, tu t'énerves davantage et tu menaces d'annuler."
-  }
-];
+/* ---------- Modèle d'examen (E33 uniquement) ---------- */
 const EXAM_TEMPLATES = [
   { id: "e33-situation1", type: "examen", title: "Oral E33 (CCF) — Situation 1 : action de fidélisation (FDRC)",
     summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
@@ -306,8 +279,7 @@ function buildExamScenario(template, genderProf, genderPro) {
 }
 
 function RULES(s) {
-  if (s.type === "examen") {
-    return `Tu joues le jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
+  return `Tu joues le jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
 
 CE JURY EST COMPOSÉ DE DEUX PERSONNES DISTINCTES, comme le veut le référentiel officiel — tu incarnes les deux, en alternant naturellement selon qui a la question la plus pertinente à poser :
 - LE / LA PROFESSEUR(E) D'ÉCONOMIE-GESTION : se concentre sur la rigueur méthodologique du diagnostic, la structuration de la démarche, le lien avec les notions du programme (sources d'information, SIC, SWOT).
@@ -352,26 +324,6 @@ FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta répon
 {"replique": "ta réplique à l'oral", "membre": "professeur" | "professionnel", "etat": "en_cours" | "conclu"}
 
 Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSegments.map(seg => `[${seg.membre}] "${seg.text}"`).join(" ")}`;
-  }
-  return `Tu joues un rôle dans un simulateur d'entraînement à la vente pour des élèves de lycée professionnel (Bac Pro commerce / relation client).
-
-TON PERSONNAGE :
-${s.persona}
-
-RÈGLES :
-- Tu es UNIQUEMENT le client. Ne donne jamais de conseil de vente, ne sors jamais du rôle.
-- Tu parles à l'oral : phrases courtes et naturelles, 1 à 3 phrases maximum par réplique.
-- Ne cède pas trop vite : un bon vendeur doit te poser des questions, t'écouter, argumenter et traiter tes objections.
-- Si le vendeur est bref, vague, maladroit ou hors sujet, réagis comme un vrai client le ferait sur le moment (surprise, agacement léger, demande de clarification) — mais CONTINUE la scène, ne l'arrête pas pour autant.
-- REGISTRE ORAL (s'applique UNIQUEMENT au texte à l'intérieur du champ "replique") : tu parles, tu n'écris pas. Phrases courtes, parfois coupées ou reprises en cours de route ("Non mais... c'est pas ce que je demande"), contractions naturelles à l'oral ("j'sais pas", "c'est pas", "t'as"), petites hésitations ("euh", "bon", "enfin"). Une réaction émotionnelle tient souvent en 3 à 6 mots, pas en une phrase entière bien construite. Évite d'aligner plusieurs phrases parfaites et complètes à la suite — ça sonne écrit, pas parlé.
-- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Fais toujours avancer la conversation d'une phrase au moins.
-- Ne fais passer "etat" à "conclu" ou "parti" que sur une décision claire et méritée (après un minimum de 5 à 6 échanges avec de vrais arguments échangés) — jamais à cause d'une seule réponse creuse, brève ou hors sujet du vendeur : dans ce cas, montre plutôt ton agacement ou ta perplexité et repose ta question, sans clore la scène.
-
-FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
-{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu" | "parti"}
-
-Ta première réplique a déjà été dite : "${s.opening}"
-Le vendeur va maintenant te répondre.`;
 }
 
 /* ---------- Éléments ---------- */
@@ -530,7 +482,7 @@ async function sellerSays(text) {
   turns.push({ role: "user", content: text });
   $("input").value = "";
   setBusy(true);
-  setStatus(scenario.type === "examen" ? "⏳ Le jury réfléchit…" : "⏳ Le client réfléchit…");
+  setStatus("⏳ Le jury réfléchit…");
 
   try {
     const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
@@ -547,14 +499,13 @@ async function sellerSays(text) {
     setStatus("🔊 " + scenario.aiLabel + " parle…");
     setBusy(false);
     refreshQuota();
-    if (etat === "conclu" || etat === "parti") { finished = true; setBusy(false); }
+    if (etat === "conclu") { finished = true; setBusy(false); }
     await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
     if (finished) {
-      addMsg("note", scenario.type === "examen" ? "L'oral est terminé."
-        : (etat === "conclu" ? "Le client a pris sa décision : vente conclue." : "Le client est parti sans acheter."));
+      addMsg("note", "L'oral est terminé.");
       setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
     } else {
-      setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+      setStatus("À vous : maintenez le micro 🎙️ appuyé pour répondre, ou tapez au clavier.");
     }
   } catch (e) {
     turns.pop();
@@ -575,14 +526,12 @@ async function evaluate() {
     box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
     return;
   }
-  const openingLines = scenario.type === "examen"
-    ? scenario.openingSegments.map(seg => "LE JURY (" + seg.membre.toUpperCase() + ") : " + seg.text)
-    : [(scenario.aiLabel + " : ") + scenario.opening];
+  const openingLines = scenario.openingSegments.map(seg => "LE JURY (" + seg.membre.toUpperCase() + ") : " + seg.text);
   const transcript = openingLines
     .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
     .join("\n");
 
-  const prompt = scenario.type === "examen" ? `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
+  const prompt = `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
 
 Transcription complète (présentation puis entretien) :
 ${transcript}
@@ -615,31 +564,6 @@ TES POINTS FORTS
 - 2 ou 3 points précis, avec pour chacun une reformulation que tu aurais pu donner
 
 CONSEIL POUR LA PROCHAINE FOIS
-Une seule phrase.` : `Tu es professeur de vente en lycée professionnel (Bac Pro Métiers du commerce et de la vente). Évalue l'élève qui jouait le VENDEUR dans cette simulation.
-
-Situation : ${scenario.title} — ${scenario.summary}
-
-Transcription :
-${transcript}
-
-Rédige une évaluation bienveillante mais exigeante, en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
-
-NOTE GLOBALE : x/20
-
-ÉTAPES DE LA VENTE
-Accueil et prise de contact : x/4 — une phrase de justification
-Découverte des besoins : x/4 — une phrase
-Argumentation : x/4 — une phrase
-Traitement des objections : x/4 — une phrase
-Conclusion de la vente : x/4 — une phrase
-
-TES POINTS FORTS
-- 2 points précis, en citant tes propres phrases
-
-À AMÉLIORER
-- 2 ou 3 points précis, avec pour chacun une phrase que tu aurais pu dire à la place
-
-CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;
 
   box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
@@ -664,7 +588,8 @@ let micMode = "chat";
 const MAX_RESTARTS = { chat: 6, presentation: 60 };
 let finalText = "";
 let presBase = "";
-let userStopped = false;
+let userStopped = false; // mode présentation : l'élève a cliqué pour arrêter
+let micHeld = false;     // mode entretien (talkie-walkie) : le doigt est encore sur le bouton
 let autoRestarts = 0;
 let hadError = false;
 if (SR) {
@@ -680,7 +605,7 @@ if (SR) {
       $("presStatus").textContent = "🔴 Je vous écoute…";
     } else {
       $("micBtn").classList.add("listening");
-      setStatus("🔴 Je vous écoute… cliquez à nouveau sur le micro quand vous avez terminé.");
+      setStatus("🔴 Je vous écoute… relâchez le micro pour envoyer.");
     }
   };
   recognition.onresult = (e) => {
@@ -706,6 +631,7 @@ if (SR) {
     }[e.error];
     if (msg) {
       userStopped = true;
+      micHeld = false;
       if (micMode === "presentation") $("presStatus").textContent = msg; else setStatus(msg, true);
     }
   };
@@ -713,30 +639,57 @@ if (SR) {
     listening = false;
     $("micBtn").classList.remove("listening");
     $("presMicBtn") && $("presMicBtn").classList.remove("listening");
-    if (!userStopped && autoRestarts < MAX_RESTARTS[micMode]) {
-      autoRestarts++;
-      try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
-    }
-    autoRestarts = 0;
+
     if (micMode === "chat") {
-      const said = $("input").value.trim();
+      // Talkie-walkie : si le doigt est encore sur le bouton, on remet
+      // l'écoute en route sans rien envoyer (coupure passagère du navigateur).
+      if (micHeld && autoRestarts < MAX_RESTARTS.chat) {
+        autoRestarts++;
+        try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
+      }
+      autoRestarts = 0;
+      const said = finalText.trim();
+      finalText = ""; // toujours vidé ici : jamais réutilisé pour un envoi suivant
+      $("input").value = "";
       if (said && !hadError) sellerSays(said);
+      hadError = false;
     } else if (micMode === "presentation") {
+      if (!userStopped && autoRestarts < MAX_RESTARTS.presentation) {
+        autoRestarts++;
+        try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
+      }
+      autoRestarts = 0;
       $("presStatus").textContent = "";
+      hadError = false;
     }
-    hadError = false;
   };
 
-  $("micBtn").onclick = () => {
-    if (busy || finished) return;
-    if (listening) { userStopped = true; recognition.stop(); return; }
+  // Entretien : talkie-walkie — on maintient le bouton appuyé pour parler,
+  // on relâche pour envoyer. Plus d'écoute continue en arrière-plan, donc
+  // plus de relance surprise ni de texte réenvoyé par erreur.
+  function startChatHold(e) {
+    if (e) e.preventDefault();
+    if (busy || finished || micHeld) return;
     stopSpeaking();
     micMode = "chat";
-    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    micHeld = true;
+    finalText = ""; hadError = false; autoRestarts = 0;
     $("input").value = "";
     setStatus("");
-    try { recognition.start(); } catch (err) { setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
-  };
+    try { recognition.start(); } catch (err) { micHeld = false; setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
+  }
+  function stopChatHold() {
+    if (!micHeld) return;
+    micHeld = false;
+    try { recognition.stop(); } catch (err) { /* déjà arrêté */ }
+  }
+  $("micBtn").addEventListener("pointerdown", startChatHold);
+  $("micBtn").addEventListener("pointerup", stopChatHold);
+  $("micBtn").addEventListener("pointerleave", stopChatHold);
+  $("micBtn").addEventListener("pointercancel", stopChatHold);
+
+  // Présentation : un clic démarre, un second clic arrête (une session de 10 min
+  // ne peut pas rester maintenue au doigt).
   $("presMicBtn").onclick = () => {
     if (listening) { userStopped = true; recognition.stop(); return; }
     micMode = "presentation";
@@ -746,23 +699,12 @@ if (SR) {
     try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
   };
 } else {
-  $("micBtn").onclick = () => {};
   $("presMicBtn").onclick = () => {};
   $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
 }
 
 /* ---------- Démarrage ---------- */
 function renderScenarios() {
-  const listVente = $("scenarioListVente");
-  for (const s of SALES_SCENARIOS) {
-    const b = document.createElement("button");
-    b.className = "scenario";
-    const t = document.createElement("strong"); t.textContent = s.title;
-    const d = document.createElement("span"); d.textContent = s.summary;
-    b.append(t, d);
-    b.onclick = () => start(s);
-    listVente.appendChild(b);
-  }
   const listExamen = $("scenarioListExamen");
   for (const tpl of EXAM_TEMPLATES) {
     const b = document.createElement("button");
@@ -840,7 +782,7 @@ async function finishPresentation() {
     setBusy(false);
     refreshQuota();
     await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
-    if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
+    if (!finished) setStatus("À vous : maintenez le micro 🎙️ appuyé pour répondre, ou tapez au clavier.");
     $("input").focus();
   } catch (e) {
     setBusy(false);
@@ -849,7 +791,7 @@ async function finishPresentation() {
 }
 
 async function start(s) {
-  scenario = s; turns = []; finished = false; lastClientLine = s.opening;
+  scenario = s; turns = []; finished = false; lastClientLine = "";
   $("chat").innerHTML = "";
   $("scenarioTitle").textContent = s.title;
   showScreen("chat");
@@ -857,25 +799,14 @@ async function start(s) {
   if (!recognition) $("micBtn").title = "Micro non disponible dans ce navigateur";
   await voicesReady;
 
-  if (s.type === "examen") {
-    for (const seg of s.openingSegments) {
-      addMsg("client", seg.text, seg.membre);
-      lastClientLine = seg.text;
-      lastMembre = seg.membre;
-      setStatus("🔊 Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
-      await speak(seg.text, s.genderByMembre[seg.membre]);
-    }
-    beginPresentationPhase();
-    return;
+  for (const seg of s.openingSegments) {
+    addMsg("client", seg.text, seg.membre);
+    lastClientLine = seg.text;
+    lastMembre = seg.membre;
+    setStatus("🔊 Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
+    await speak(seg.text, s.genderByMembre[seg.membre]);
   }
-
-  addMsg("client", s.opening);
-  lastClientLine = s.opening;
-  lastMembre = null;
-  setStatus("🔊 " + s.aiLabel + " parle…");
-  await speak(s.opening);
-  if (!finished) setStatus("À vous : répondez au micro 🎙️ ou au clavier.");
-  $("input").focus();
+  beginPresentationPhase();
 }
 
 $("sendBtn").onclick = () => sellerSays($("input").value);

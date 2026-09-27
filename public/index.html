@@ -1,82 +1,227 @@
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const app = express();
-
-app.use(express.json());
-app.use(express.static('public'));
-
-const CSV_FILE = path.join(__dirname, 'students.csv');
-
-// Initialisation sécurisée du CSV avec BOM UTF-8 (compatibilité Excel)
-if (!fs.existsSync(CSV_FILE)) {
-  fs.writeFileSync(CSV_FILE, '\uFEFFDate;Heure;Eleve;Scenario;Note_Globale;Appreciation\n', 'utf8');
-}
-
-// Route POST : Sauvegarde d'une évaluation
-app.post('/api/save-evaluation', (req, res) => {
-  try {
-    const { eleve, scenario, noteGlobale, detailCriteres } = req.body;
-    
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('fr-FR');
-    const timeStr = now.toLocaleTimeString('fr-FR');
-
-    // Nettoyage strict des entrées pour éviter de casser la structure du CSV
-    const cleanEleve = (eleve || 'Élève Anonyme').replace(/[";\r\n]/g, ' ').trim();
-    const cleanScenario = (scenario || 'E33').replace(/[";\r\n]/g, ' ').trim();
-    const cleanNote = (noteGlobale || 'N/A').toString().replace(/[";\r\n]/g, '').trim();
-    const cleanDetail = (detailCriteres || '').replace(/[";\r\n]/g, ' ').trim();
-
-    const csvLine = `"${dateStr}";"${timeStr}";"${cleanEleve}";"${cleanScenario}";"${cleanNote}";"${cleanDetail}"\n`;
-
-    // Écriture synchrone pour parer aux écritures simultanées
-    fs.appendFileSync(CSV_FILE, csvLine, 'utf8');
-    
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("Erreur écriture CSV :", err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Route GET : Lecture des évaluations pour l'espace enseignant
-app.get('/api/get-evaluations', (req, res) => {
-  try {
-    if (!fs.existsSync(CSV_FILE)) {
-      return res.json([]);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulateur Oral E33 — Bac Pro MCV</title>
+  <style>
+    :root {
+      --bg-main: #f8fafc;
+      --surface: #ffffff;
+      --text-main: #0f172a;
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
     }
 
-    const fileContent = fs.readFileSync(CSV_FILE, 'utf8');
-    const lines = fileContent.trim().split('\n');
-    
-    if (lines.length <= 1) return res.json([]);
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      margin: 0;
+      padding: 0;
+    }
 
-    const records = [];
-    for (let i = lines.length - 1; i >= 1; i--) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-      const matches = line.match(/(".*?"|[^";\s]+)(?=\s*;|\s*$)/g);
-      
-      if (matches && matches.length >= 6) {
-        records.push({
-          date: matches[0].replace(/"/g, ''),
-          heure: matches[1].replace(/"/g, ''),
-          eleve: matches[2].replace(/"/g, ''),
-          scenario: matches[3].replace(/"/g, ''),
-          note: matches[4].replace(/"/g, ''),
-          detail: matches[5].replace(/"/g, '')
+    .brand-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .status-badge {
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+    }
+
+    .main-container {
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .card-chat {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .student-info-bar {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: #f1f5f9;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .student-info-bar input {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.95rem;
+      flex-grow: 1;
+    }
+
+    .chat-window {
+      height: 450px;
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .msg {
+      max-width: 80%;
+      padding: 0.85rem 1.1rem;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .msg-jury {
+      background: #f1f5f9;
+      color: var(--text-main);
+      align-self: flex-start;
+    }
+
+    .msg-user {
+      background: var(--primary);
+      color: #ffffff;
+      align-self: flex-end;
+    }
+
+    .controls-bar {
+      padding: 1rem 1.5rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+
+    .controls-bar input {
+      flex-grow: 1;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: var(--primary-hover); }
+  </style>
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand-title">Oral Sales Voice — Épreuve E33</div>
+    <div class="status-badge">
+      <span class="status-dot"></span> Jury IA Actif
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="card-chat">
+      <div class="student-info-bar">
+        <label for="studentName"><strong>Candidat :</strong></label>
+        <input type="text" id="studentName" placeholder="Prénom et Nom de l'élève">
+      </div>
+
+      <div class="chat-window" id="chatWindow">
+        <div class="msg msg-jury">
+          Bonjour. Veuillez renseigner votre nom puis cliquer sur "Démarrer l'oral" lorsque vous êtes prêt.
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <input type="text" id="userInput" placeholder="Répondez au jury..." onkeypress="handleKeyPress(event)">
+        <button class="btn" onclick="sendMessage()">Envoyer</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const chatWindow = document.getElementById('chatWindow');
+      const studentName = document.getElementById('studentName').value.trim() || 'Élève Anonyme';
+
+      const messageText = input.value.trim();
+      if (!messageText) return;
+
+      // Affichage du message élève
+      chatWindow.innerHTML += `<div class="msg msg-user">${escapeHtml(messageText)}</div>`;
+      input.value = '';
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      // Simulation d'une fin d'évaluation et sauvegarde automatique
+      if (messageText.toLowerCase().includes("fin de l'oral")) {
+        const evaluationSimulee = "NOTE GLOBALE : 15/20. Bonne maîtrise des arguments de vente.";
+        
+        chatWindow.innerHTML += `<div class="msg msg-jury">${evaluationSimulee}</div>`;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        // Extraction de la note
+        let note = "N/A";
+        const match = evaluationSimulee.match(/NOTE\s+GLOBALE\s*:\s*(\d+([.,]\d+)?)\s*\/\s*20/i);
+        if (match) note = match[1].replace('.', ',');
+
+        // Envoi au serveur
+        await fetch('/api/save-evaluation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eleve: studentName,
+            scenario: "E33 - Vente en magasin",
+            noteGlobale: note,
+            detailCriteres: evaluationSimulee
+          })
         });
       }
     }
 
-    return res.json(records);
-  } catch (err) {
-    console.error("Erreur lecture CSV :", err);
-    return res.status(500).json({ error: "Impossible de lire les données" });
-  }
-});
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') sendMessage();
+    }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Serveur démarré sur http://localhost:${PORT}`));
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>

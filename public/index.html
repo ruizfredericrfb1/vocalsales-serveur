@@ -616,6 +616,7 @@ if (SR) {
     }
     if (micMode === "presentation") {
       $("presTranscript").value = (presBase + finalText + interim).trim();
+      saveDraft($("presTranscript").value);
     } else {
       $("input").value = (finalText + interim).trim();
     }
@@ -734,13 +735,36 @@ function updatePresTimerDisplay() {
   $("presTimer").classList.toggle("urgent", r <= 60);
 }
 
+/* ---------- Sauvegarde locale de la présentation (récupération après plantage) ----------
+   Le texte est enregistré dans le navigateur au fur et à mesure, pour ne pas
+   perdre 10 minutes de présentation si l'onglet se ferme ou plante par erreur.
+   Ça ne quitte jamais l'appareil de l'élève : rien n'est envoyé au serveur. */
+function draftKey() { return "vocalsales_pres_draft_" + studentCode; }
+function saveDraft(text) {
+  try { if (text) localStorage.setItem(draftKey(), text); else localStorage.removeItem(draftKey()); }
+  catch (e) { /* navigation privée ou stockage plein : tant pis, pas bloquant */ }
+}
+function loadDraft() {
+  try { return localStorage.getItem(draftKey()) || ""; }
+  catch (e) { return ""; }
+}
+function clearDraft() { saveDraft(""); }
+
 function beginPresentationPhase() {
   presentationDone = false;
-  $("presTranscript").value = "";
   $("presStatus").textContent = "";
   presRemaining = 600;
   updatePresTimerDisplay();
   showScreen("presentation");
+
+  const draft = loadDraft();
+  if (draft) {
+    $("presTranscript").value = draft;
+    $("presStatus").textContent = "Un brouillon de votre dernière présentation a été retrouvé et restauré ci-dessus — modifiez-le ou effacez-le si besoin.";
+  } else {
+    $("presTranscript").value = "";
+  }
+
   clearInterval(presTimerId);
   presTimerId = setInterval(() => {
     presRemaining--;
@@ -756,6 +780,7 @@ async function finishPresentation() {
   if (listening) { userStopped = true; recognition.stop(); }
 
   const presentationText = $("presTranscript").value.trim();
+  clearDraft();
   showScreen("chat");
   $("scenarioTitle").textContent = scenario.title;
   addMsg("seller", presentationText || "(aucune présentation enregistrée)");
@@ -818,6 +843,7 @@ $("replayBtn").onclick = () => {
 };
 $("endBtn").onclick = evaluate;
 $("presDoneBtn").onclick = finishPresentation;
+$("presTranscript").addEventListener("input", () => saveDraft($("presTranscript").value));
 $("quitBtn").onclick = () => {
   stopSpeaking();
   clearInterval(presTimerId);

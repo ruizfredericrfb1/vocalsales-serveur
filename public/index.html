@@ -476,9 +476,17 @@ function pickVoice(gender) {
 let currentAudio = null;
 let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
 
-function speakBrowser(text, gender) {
+// Jeton de lecture : chaque appel à speak() en réclame un nouveau. Si un appel
+// plus récent démarre pendant qu'un ancien attend encore sa réponse réseau
+// (typiquement : l'accusé de réception qui attend encore pendant que la
+// vraie réplique est déjà prête), l'ancien se voit périmé et n'affiche ni
+// ne joue plus rien à son retour — ça évite que les deux voix se chevauchent.
+let speechToken = 0;
+
+function speakBrowser(text, gender, token) {
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) return resolve();
+    if (token !== speechToken) return resolve(); // périmé : une lecture plus récente a pris le relais
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     const v = pickVoice(gender || scenario.gender);
@@ -491,6 +499,7 @@ function speakBrowser(text, gender) {
 
 async function speak(text, genderOverride) {
   stopSpeaking();
+  const myToken = speechToken; // capturé juste après stopSpeaking(), qui vient d'incrémenter le jeton
   const gender = genderOverride || scenario.gender;
   if (!azureUnavailable) {
     try {
@@ -500,6 +509,7 @@ async function speak(text, genderOverride) {
       });
       if (!r.ok) throw new Error("azure_indisponible");
       const blob = await r.blob();
+      if (myToken !== speechToken) { return; } // périmé pendant le chargement : on abandonne silencieusement
       const url = URL.createObjectURL(blob);
       currentAudio = new Audio(url);
       await new Promise(resolve => {
@@ -513,10 +523,12 @@ async function speak(text, genderOverride) {
       azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
     }
   }
-  await speakBrowser(text, gender);
+  if (myToken !== speechToken) return; // périmé avant même le repli navigateur
+  await speakBrowser(text, gender, myToken);
 }
 
 function stopSpeaking() {
+  speechToken++; // périme toute lecture en cours ou en attente
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if ("speechSynthesis" in window) speechSynthesis.cancel();
 }
@@ -943,8 +955,14 @@ function beginPresentationPhase() {
 
   const draft = loadDraft();
   if (draft) {
-    $("presTranscript").value = draft;
-    $("presStatus").textContent = "Un brouillon de votre dernière présentation a été retrouvé et restauré ci-dessus — modifiez-le ou effacez-le si besoin.";
+    const reprendre = confirm("Un brouillon d'une présentation précédente a été retrouvé. Voulez-vous le reprendre ?\n\nOK = reprendre ce brouillon (vous aurez de nouveau 10 minutes)\nAnnuler = repartir d'une présentation vierge");
+    if (reprendre) {
+      $("presTranscript").value = draft;
+      $("presStatus").textContent = "Brouillon repris — vous disposez à nouveau de 10 minutes complètes.";
+    } else {
+      clearDraft();
+      $("presTranscript").value = "";
+    }
   } else {
     $("presTranscript").value = "";
   }

@@ -423,7 +423,8 @@ CE QUE TU DOIS ÉVALUER PENDANT L'ENTRETIEN (grille officielle E33 Situation 1) 
 RÈGLES :
 - Tu es UNIQUEMENT l'examinateur. Ne donne jamais la réponse, ne sors jamais du rôle.
 - RÈGLE DE PRIORITÉ ABSOLUE, À VÉRIFIER AVANT CHAQUE RÉPLIQUE : passe en revue mentalement les 8 points du diagnostic (partie 1). Si la présentation de l'élève a été sommaire, rapide, ou n'a pas clairement traité au moins 5 de ces 8 points (l'entreprise, l'assortiment, la clientèle, la politique commerciale, la concurrence, la zone de chalandise, les outils actuels, le SWOT), tu DOIS consacrer tes 2 à 3 premières questions à combler ces trous du diagnostic — jamais interroger sur la pertinence ou la cohérence des actions proposées tant que le diagnostic reste flou, puisque tu ne peux pas juger une cohérence que tu n'as pas les moyens de vérifier. Ne passe aux questions sur les actions (partie 2) qu'une fois le contexte suffisamment établi, par la présentation initiale ou par tes propres questions.
-- Ta toute première réplique doit réagir en une phrase à la présentation (sans la résumer ni la commenter en détail), puis poser IMMÉDIATEMENT ta première question — en respectant la règle de priorité ci-dessus.
+- Ta toute première réplique enchaîne DIRECTEMENT sur ta première question, sans formule de politesse d'ouverture ("merci", "d'accord", "très bien"...) — ces formules ont déjà été dites par ailleurs. Ne résume pas non plus la présentation, pose directement ta question, en respectant la règle de priorité ci-dessus.
+- N'ouvre jamais une réplique par "merci", "d'accord", "très bien" ou une formule de politesse similaire, sur aucun tour de l'entretien — ces formules sont prises en charge séparément. Enchaîne toujours directement sur le fond.
 - Tu parles à l'oral : phrases courtes et naturelles, 1 à 2 questions maximum par réplique.
 - Pose des questions précises qui challengent les choix de l'élève sur SA propre présentation — jamais de question générique déconnectée de ce qu'il vient de dire.
 - Une fois le diagnostic suffisamment établi, vérifie explicitement que les DEUX actions de FDRC ont bien été proposées et découlent logiquement de ce diagnostic — si ce lien n'est pas clair, demande-le directement.
@@ -585,6 +586,28 @@ async function refreshQuota() {
   try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
 }
 
+/* ---------- Accusé de réception immédiat (masque le temps de calcul) ----------
+   Le jury n'a pas encore répondu, mais le silence total pendant qu'on attend
+   Claude puis la voix donne l'impression que rien ne se passe. On joue une
+   très courte formule tout de suite, en parallèle du calcul réel — dès que
+   la vraie réplique est prête, elle coupe la formule et prend le relais. */
+const ACK_FILLERS = ["D'accord.", "Très bien.", "Je vois.", "Entendu.", "Merci."];
+let lastAckIndex = -1;
+function pickAckFiller() {
+  let i;
+  do { i = Math.floor(Math.random() * ACK_FILLERS.length); } while (i === lastAckIndex && ACK_FILLERS.length > 1);
+  lastAckIndex = i;
+  return ACK_FILLERS[i];
+}
+function pickAckGender() {
+  if (!scenario || !scenario.genderByMembre) return undefined;
+  const genders = Object.values(scenario.genderByMembre);
+  return genders[Math.floor(Math.random() * genders.length)];
+}
+function playAck() {
+  speak(pickAckFiller(), pickAckGender()); // volontairement non attendu : joue en parallèle du calcul
+}
+
 async function sellerSays(text) {
   text = text.trim();
   if (!text || busy || finished) return;
@@ -596,6 +619,7 @@ async function sellerSays(text) {
   $("input").value = "";
   setBusy(true);
   setStatus("⏳ Le jury réfléchit…");
+  playAck();
 
   try {
     const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
@@ -951,6 +975,7 @@ async function finishPresentation() {
   addMsg("seller", presentationText || "(aucune présentation enregistrée)");
   setBusy(true);
   setStatus("⏳ Le jury réfléchit…");
+  playAck();
 
   turns = [{
     role: "user",

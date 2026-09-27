@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VocalSales — Simulateur de vente</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Newsreader:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
 <style>
   :root {
     box-sizing: border-box;
@@ -39,17 +39,45 @@
   .tagline { color: var(--muted); margin: 4px 0 24px; }
   .hidden { display: none !important; }
 
-  .landing-badge {
-    display: inline-block; background: var(--client); color: var(--accent);
-    font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px;
-    margin-bottom: 10px; letter-spacing: .02em;
+  /* ---------- Page d'accueil : hero sombre, ancré dans l'oral lui-même ---------- */
+  .landing-hero-wrap {
+    background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 40px;
   }
-  .landing-features { margin: 20px 0; }
-  .landing-feature { display: grid; gap: 2px; }
-  .landing-feature + .landing-feature { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-  .landing-feature strong { font-size: 1.02rem; }
-  .landing-feature span { color: var(--muted); font-size: .92rem; }
-  .landing-privacy { color: var(--muted); font-size: .88rem; margin: 4px 0 22px; }
+  .landing-hero { max-width: 640px; margin: 0 auto; }
+  .landing-badge {
+    display: inline-block; border: 1px solid rgba(233,239,236,.3); color: #cfe3da;
+    font-size: .82rem; font-weight: 400; padding: 5px 14px; border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .landing-hero h1 {
+    font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.5rem;
+    line-height: 1.15; margin: 0 0 14px; color: #ffffff; letter-spacing: -.01em;
+  }
+  .landing-hero .tagline { color: #a9bdb3; font-size: 1.08rem; max-width: 46ch; margin: 0 0 32px; }
+
+  .landing-transcript {
+    background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 30px; display: grid; gap: 14px;
+  }
+  .landing-line { display: grid; gap: 3px; }
+  .landing-line .who { font-size: .78rem; color: #7fae9a; }
+  .landing-line .said { font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eef4f0; }
+  .landing-line.candidat .who { color: #d7c98a; }
+  .landing-line.candidat .said { color: #f4efdd; }
+
+  .landing-hero .actions { margin: 0; }
+  #landingStartBtn { background: #d7c98a; color: #12291f; }
+  #landingStartBtn:hover { background: #e3d7a3; }
+
+  .landing-lower { max-width: 640px; margin: 0 auto; padding: 34px 0 30px; }
+  .landing-feature {
+    display: grid; grid-template-columns: 3px 1fr; gap: 16px; padding: 16px 0;
+  }
+  .landing-feature::before { content: ""; background: #3f6c5a; border-radius: 2px; }
+  .landing-feature strong { display: block; font-size: 1.02rem; color: #ffffff; margin-bottom: 3px; }
+  .landing-feature span { color: #a9bdb3; font-size: .92rem; }
+  .landing-feature + .landing-feature { border-top: 1px solid rgba(233,239,236,.1); }
+  .landing-privacy { color: #7fae9a; font-size: .85rem; margin: 6px 0 0; }
 
   .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
   .group-title:first-of-type { margin-top: 0; }
@@ -147,11 +175,34 @@
 <main>
   <!-- Écran -1 : accueil / présentation -->
   <section id="screenLanding">
-    <div class="landing-badge">Bac Pro Métiers du Commerce et de la Vente</div>
-    <h1>VocalSales</h1>
-    <p class="tagline">Préparez l'oral E33 face à un jury virtuel, dans les conditions réelles de l'épreuve.</p>
+    <div class="landing-hero-wrap">
+      <div class="landing-hero">
+        <div class="landing-badge">Bac Pro MCV — Épreuve E33, Situation 1</div>
+        <h1>L'entretien commence maintenant.</h1>
+        <p class="tagline">Un jury virtuel vous interroge sur votre action de fidélisation, dans les conditions réelles de l'oral.</p>
 
-    <div class="card landing-features">
+        <div class="landing-transcript">
+          <div class="landing-line">
+            <span class="who">Le jury — professeur(e)</span>
+            <span class="said">« Vous avez mentionné le SWOT — quelle est la principale menace que vous avez identifiée ? »</span>
+          </div>
+          <div class="landing-line candidat">
+            <span class="who">Vous</span>
+            <span class="said">« Alors, la principale menace... c'est l'arrivée d'une enseigne concurrente à 200 mètres. »</span>
+          </div>
+          <div class="landing-line">
+            <span class="who">Le jury — professionnel(le)</span>
+            <span class="said">« Et concrètement, comment votre première action y répond ? »</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="landingStartBtn">Commencer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="landing-lower">
       <div class="landing-feature">
         <strong>Un jury à deux voix</strong>
         <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
@@ -164,12 +215,7 @@
         <strong>Une évaluation détaillée</strong>
         <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
       </div>
-    </div>
-
-    <p class="landing-privacy">🔒 Données hébergées en Europe. Aucune donnée vendue ni partagée.</p>
-
-    <div class="actions" style="margin-top:0;">
-      <button id="landingStartBtn">Commencer</button>
+      <p class="landing-privacy">Données hébergées en Europe. Aucune donnée vendue ni partagée.</p>
     </div>
   </section>
 

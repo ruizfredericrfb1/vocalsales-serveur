@@ -122,6 +122,13 @@
     #sendBtn { grid-column: 1 / -1; }
     .msg { max-width: 92%; }
   }
+
+  /* Impression / export PDF : uniquement le texte de l'évaluation, en noir sur blanc */
+  @media print {
+    body * { visibility: hidden; }
+    #debrief, #debrief * { visibility: visible; }
+    #debrief { position: absolute; top: 0; left: 0; width: 100%; background: #fff; color: #000; }
+  }
 </style>
 </head>
 <body>
@@ -170,6 +177,13 @@
           <option value="male">Un professionnel</option>
           <option value="female">Une professionnelle</option>
         </select>
+
+        <label style="font-weight:400; color:var(--muted);">Tester votre micro (gratuit, ne compte pas dans votre temps)</label>
+        <div class="pres-actions">
+          <button class="secondary" id="testMicBtn" type="button">🎙️ Maintenir pour tester</button>
+        </div>
+        <p id="testMicPreview" style="margin:0; color:var(--muted); min-height:1.4em;"></p>
+
         <div class="actions" style="margin-top:0;">
           <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
           <button class="secondary" id="prepBackBtn">Retour</button>
@@ -200,6 +214,7 @@
       </div>
       <div class="chat" id="chat" aria-live="polite"></div>
       <div class="status" id="status"></div>
+      <button class="secondary hidden" id="retryBtn" type="button">🔁 Réessayer l'envoi</button>
       <div class="reply">
         <button id="micBtn" title="Maintenir appuyé pour répondre" aria-label="Maintenir appuyé pour répondre au micro">🎙️</button>
         <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
@@ -216,6 +231,7 @@
       <h2>Votre évaluation</h2>
       <div class="debrief" id="debrief">Analyse en cours…</div>
       <div class="actions">
+        <button class="secondary" id="printBtn">🖨️ Enregistrer en PDF</button>
         <button id="againBtn">Recommencer</button>
       </div>
     </section>
@@ -478,6 +494,7 @@ async function sellerSays(text) {
   if (!text || busy || finished) return;
 
   stopSpeaking();
+  $("retryBtn").classList.add("hidden");
   addMsg("seller", text);
   turns.push({ role: "user", content: text });
   $("input").value = "";
@@ -513,8 +530,12 @@ async function sellerSays(text) {
     $("chat").lastChild && $("chat").lastChild.remove();
     setBusy(false);
     setStatus(errorText(e), true);
+    if (e.code !== "quota_depasse" && e.code !== "code_invalide") {
+      $("retryBtn").classList.remove("hidden");
+    }
   }
 }
+$("retryBtn").onclick = () => sellerSays($("input").value);
 
 async function evaluate() {
   stopSpeaking();
@@ -603,6 +624,9 @@ if (SR) {
     if (micMode === "presentation") {
       $("presMicBtn").classList.add("listening");
       $("presStatus").textContent = "🔴 Je vous écoute…";
+    } else if (micMode === "test") {
+      $("testMicBtn").classList.add("listening");
+      $("testMicPreview").textContent = "🔴 Je vous écoute…";
     } else {
       $("micBtn").classList.add("listening");
       setStatus("🔴 Je vous écoute… relâchez le micro pour envoyer.");
@@ -617,6 +641,8 @@ if (SR) {
     if (micMode === "presentation") {
       $("presTranscript").value = (presBase + finalText + interim).trim();
       saveDraft($("presTranscript").value);
+    } else if (micMode === "test") {
+      $("testMicPreview").textContent = (finalText + interim).trim() || "🔴 Je vous écoute…";
     } else {
       $("input").value = (finalText + interim).trim();
     }
@@ -633,13 +659,26 @@ if (SR) {
     if (msg) {
       userStopped = true;
       micHeld = false;
-      if (micMode === "presentation") $("presStatus").textContent = msg; else setStatus(msg, true);
+      if (micMode === "presentation") $("presStatus").textContent = msg;
+      else if (micMode === "test") $("testMicPreview").textContent = msg;
+      else setStatus(msg, true);
     }
   };
   recognition.onend = () => {
     listening = false;
     $("micBtn").classList.remove("listening");
     $("presMicBtn") && $("presMicBtn").classList.remove("listening");
+    $("testMicBtn") && $("testMicBtn").classList.remove("listening");
+
+    if (micMode === "test") {
+      // Simple démo gratuite : on affiche juste ce qui a été capté, rien n'est
+      // envoyé nulle part, aucun appel à l'IA, aucune consommation de quota.
+      if (!$("testMicPreview").textContent.trim() || hadError) {
+        $("testMicPreview").textContent = "(rien capté — vérifiez votre micro, ou testez à nouveau)";
+      }
+      hadError = false;
+      return;
+    }
 
     if (micMode === "chat") {
       // Talkie-walkie : si le doigt est encore sur le bouton, on remet
@@ -699,9 +738,30 @@ if (SR) {
     $("presStatus").textContent = "";
     try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
   };
+
+  // Test micro gratuit (écran "Avant l'oral") : même geste talkie-walkie,
+  // mais rien n'est envoyé nulle part — juste une démonstration.
+  function startTestHold(e) {
+    if (e) e.preventDefault();
+    if (listening) return;
+    micMode = "test";
+    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
+    $("testMicPreview").textContent = "";
+    try { recognition.start(); } catch (err) { $("testMicPreview").textContent = "Impossible de démarrer le micro."; }
+  }
+  function stopTestHold() {
+    if (micMode !== "test" || !listening) return;
+    try { recognition.stop(); } catch (err) { /* déjà arrêté */ }
+  }
+  $("testMicBtn").addEventListener("pointerdown", startTestHold);
+  $("testMicBtn").addEventListener("pointerup", stopTestHold);
+  $("testMicBtn").addEventListener("pointerleave", stopTestHold);
+  $("testMicBtn").addEventListener("pointercancel", stopTestHold);
 } else {
   $("presMicBtn").onclick = () => {};
   $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
+  $("testMicBtn").disabled = true;
+  $("testMicPreview").textContent = "Micro non disponible dans ce navigateur.";
 }
 
 /* ---------- Démarrage ---------- */
@@ -750,8 +810,12 @@ function loadDraft() {
 }
 function clearDraft() { saveDraft(""); }
 
+let silenceWarningShown = false;
+const SILENCE_WARNING_AFTER_SECONDS = 90;
+
 function beginPresentationPhase() {
   presentationDone = false;
+  silenceWarningShown = false;
   $("presStatus").textContent = "";
   presRemaining = 600;
   updatePresTimerDisplay();
@@ -769,6 +833,11 @@ function beginPresentationPhase() {
   presTimerId = setInterval(() => {
     presRemaining--;
     updatePresTimerDisplay();
+    const elapsed = 600 - presRemaining;
+    if (!silenceWarningShown && elapsed === SILENCE_WARNING_AFTER_SECONDS && !$("presTranscript").value.trim()) {
+      silenceWarningShown = true;
+      $("presStatus").textContent = "⚠️ Rien n'a encore été capté depuis 1 min 30 — vérifiez que votre micro fonctionne, ou continuez au clavier.";
+    }
     if (presRemaining <= 0) finishPresentation();
   }, 1000);
 }
@@ -851,6 +920,7 @@ $("quitBtn").onclick = () => {
   showScreen("setup");
 };
 $("againBtn").onclick = () => showScreen("setup");
+$("printBtn").onclick = () => window.print();
 
 renderScenarios();
 </script>

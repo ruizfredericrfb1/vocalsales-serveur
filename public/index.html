@@ -39,6 +39,18 @@
   .tagline { color: var(--muted); margin: 4px 0 24px; }
   .hidden { display: none !important; }
 
+  .landing-badge {
+    display: inline-block; background: var(--client); color: var(--accent);
+    font-size: .8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+    margin-bottom: 10px; letter-spacing: .02em;
+  }
+  .landing-features { margin: 20px 0; }
+  .landing-feature { display: grid; gap: 2px; }
+  .landing-feature + .landing-feature { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .landing-feature strong { font-size: 1.02rem; }
+  .landing-feature span { color: var(--muted); font-size: .92rem; }
+  .landing-privacy { color: var(--muted); font-size: .88rem; margin: 4px 0 22px; }
+
   .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
   .group-title:first-of-type { margin-top: 0; }
   .group-hint { color: var(--muted); margin: -6px 0 12px; font-size: .95rem; }
@@ -133,17 +145,45 @@
 </head>
 <body>
 <main>
-  <h1>VocalSales</h1>
-  <p class="tagline">Entraînement à la vente et préparation aux oraux d'examen, face à une IA.</p>
+  <!-- Écran -1 : accueil / présentation -->
+  <section id="screenLanding">
+    <div class="landing-badge">Bac Pro Métiers du Commerce et de la Vente</div>
+    <h1>VocalSales</h1>
+    <p class="tagline">Préparez l'oral E33 face à un jury virtuel, dans les conditions réelles de l'épreuve.</p>
+
+    <div class="card landing-features">
+      <div class="landing-feature">
+        <strong>Un jury à deux voix</strong>
+        <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
+      </div>
+      <div class="landing-feature">
+        <strong>Aligné sur la grille officielle</strong>
+        <span>Situation 1 de l'E33 : diagnostic, actions de fidélisation, cohérence avec le contexte.</span>
+      </div>
+      <div class="landing-feature">
+        <strong>Une évaluation détaillée</strong>
+        <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
+      </div>
+    </div>
+
+    <p class="landing-privacy">🔒 Données hébergées en Europe. Aucune donnée vendue ni partagée.</p>
+
+    <div class="actions" style="margin-top:0;">
+      <button id="landingStartBtn">Commencer</button>
+    </div>
+  </section>
 
   <!-- Écran 0 : connexion -->
-  <section id="screenLogin">
+  <section id="screenLogin" class="hidden">
+    <h1 style="margin-bottom:4px;">VocalSales</h1>
+    <p class="tagline">Entraînement à la vente et préparation aux oraux d'examen, face à une IA.</p>
     <div class="card">
       <label for="codeInput">Votre code de connexion</label>
       <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
       <div id="loginError" class="status err"></div>
       <div class="actions" style="margin-top:0;">
         <button id="loginBtn">Se connecter</button>
+        <button class="secondary" id="landingBackBtn" type="button">← Retour</button>
       </div>
     </div>
   </section>
@@ -255,6 +295,16 @@ function renderQuota(s) {
     : "Temps restant ce mois-ci : " + s.minutesRestantes + " min / " + s.minutesLimite + " min";
   el.classList.toggle("low", s.minutesRestantes <= 10);
 }
+
+document.getElementById("landingStartBtn").onclick = () => {
+  document.getElementById("screenLanding").classList.add("hidden");
+  document.getElementById("screenLogin").classList.remove("hidden");
+  document.getElementById("codeInput").focus();
+};
+document.getElementById("landingBackBtn").onclick = () => {
+  document.getElementById("screenLogin").classList.add("hidden");
+  document.getElementById("screenLanding").classList.remove("hidden");
+};
 
 document.getElementById("loginBtn").onclick = async () => {
   const code = document.getElementById("codeInput").value.trim();

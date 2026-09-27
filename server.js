@@ -77,7 +77,8 @@ function consumeQuota(code, cost) {
 }
 
 const app = express();
-app.use(express.json({ limit: "200kb" }));
+app.set("trust proxy", true); // Render est derrière un proxy : nécessaire pour obtenir la vraie IP du visiteur
+app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ---------- Élèves : Supabase en priorité, fichier CSV en secours ---------- */
@@ -121,12 +122,40 @@ async function requireStudent(req, res, next) {
 }
 
 /* ---------- Espace enseignant : ajouter des élèves sans passer par GitHub ---------- */
+// Limite de tentatives : après 8 essais incorrects, on bloque 5 minutes.
+// Simple et suffisant pour un usage à l'échelle d'un établissement — pas
+// conçu pour résister à une attaque distribuée depuis de nombreuses adresses.
+const TEACHER_LOGIN_MAX_ATTEMPTS = 8;
+const TEACHER_LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
+const teacherLoginAttempts = new Map(); // ip -> { count, lockedUntil }
+
 function checkTeacherPassword(req, res) {
-  const password = String(req.body.password || req.query.password || "");
+  const ip = req.ip || req.socket.remoteAddress || "inconnu";
+  const now = Date.now();
+  const entry = teacherLoginAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+
+  if (entry.lockedUntil > now) {
+    const minutes = Math.ceil((entry.lockedUntil - now) / 60000);
+    res.status(429).json({ error: "trop_de_tentatives", message: `Trop de tentatives incorrectes. Réessayez dans ${minutes} min.` });
+    return false;
+  }
+
+  // Le mot de passe voyage désormais dans un en-tête plutôt que dans
+  // l'adresse (?password=...), pour ne pas finir dans l'historique du
+  // navigateur ni d'éventuels journaux d'accès.
+  const password = String(req.headers["x-teacher-password"] || req.body.password || "");
   if (password !== TEACHER_PASSWORD) {
+    entry.count += 1;
+    if (entry.count >= TEACHER_LOGIN_MAX_ATTEMPTS) {
+      entry.lockedUntil = now + TEACHER_LOGIN_LOCKOUT_MS;
+      entry.count = 0;
+    }
+    teacherLoginAttempts.set(ip, entry);
     res.status(401).json({ error: "mot_de_passe_invalide", message: "Mot de passe enseignant incorrect." });
     return false;
   }
+
+  teacherLoginAttempts.delete(ip); // succès : on oublie les essais précédents
   return true;
 }
 
@@ -385,5 +414,17 @@ app.post("/api/evaluate", requireStudent, async (req, res) => {
 });
 
 app.get("/api/health", (req, res) => res.json({ ok: true, clef: Boolean(ANTHROPIC_API_KEY) }));
+
+// Filet de sécurité : si jamais un message dépasse quand même la limite,
+// on renvoie une vraie erreur JSON exploitable par le client, plutôt que
+// de laisser Express répondre en texte brut (ce qui donnait un message
+// générique et peu clair à l'élève).
+app.use((err, req, res, next) => {
+  if (err && err.type === "entity.too.large") {
+    return res.status(413).json({ error: "message_trop_volumineux", message: "Votre échange est devenu trop long pour être envoyé d'un coup. Terminez l'oral et consultez votre évaluation, puis recommencez une nouvelle session si besoin." });
+  }
+  console.error("Erreur non gérée:", err && err.message);
+  res.status(500).json({ error: "erreur_serveur", message: "Une erreur inattendue est survenue. Réessayez." });
+});
 
 app.listen(PORT, () => console.log("VocalSales serveur démarré sur le port " + PORT));

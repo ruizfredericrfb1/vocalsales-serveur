@@ -38,6 +38,13 @@
   h1 { font-size: 1.8rem; margin: 0; }
   .tagline { color: var(--muted); margin: 4px 0 24px; }
   .hidden { display: none !important; }
+  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: #0c211b; }
+  .ico { width: 1.15em; height: 1.15em; vertical-align: -0.2em; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  button .ico { margin-right: .45em; }
+  #micBtn .ico { margin-right: 0; width: 1.6rem; height: 1.6rem; vertical-align: middle; }
+  h2, .group-title, .scenario strong { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
+  /* Bandes sombres pleine largeur (sans changer la mise en page de la colonne centrale) */
+  .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #0c211b; clip-path: inset(0 -100vmax); }
 
   /* ---------- Page d'accueil : hero sombre, ancré dans l'oral lui-même ---------- */
   .landing-hero-wrap {
@@ -69,15 +76,28 @@
   #landingStartBtn { background: #d7c98a; color: #12291f; }
   #landingStartBtn:hover { background: #e3d7a3; }
 
-  .landing-lower { max-width: 640px; margin: 0 auto; padding: 34px 0 30px; }
-  .landing-feature {
-    display: grid; grid-template-columns: 3px 1fr; gap: 16px; padding: 16px 0;
-  }
+  .landing-lower { max-width: 640px; margin: 44px auto 0; padding-top: 8px; border-top: 1px solid rgba(233,239,236,.12); }
+  .landing-feature { display: grid; grid-template-columns: 3px 1fr; gap: 16px; padding: 16px 0; }
   .landing-feature::before { content: ""; background: #3f6c5a; border-radius: 2px; }
   .landing-feature strong { display: block; font-size: 1.02rem; color: #ffffff; margin-bottom: 3px; }
-  .landing-feature span { color: #a9bdb3; font-size: .92rem; }
+  .landing-feature span { display: block; color: #a9bdb3; font-size: .92rem; }
   .landing-feature + .landing-feature { border-top: 1px solid rgba(233,239,236,.1); }
-  .landing-privacy { color: #7fae9a; font-size: .85rem; margin: 6px 0 0; }
+  .landing-privacy { color: #8fb8a6; font-size: .85rem; margin: 10px 0 0; }
+
+  .dark-wrap { background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 48px; }
+  .dark-inner { max-width: 640px; margin: 0 auto; }
+  .dark-wrap h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.2rem; line-height: 1.15; color: #ffffff; margin: 0 0 10px; }
+  .dark-wrap .tagline { color: #a9bdb3; margin: 0 0 26px; }
+  .dark-card { background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; }
+  .dark-card label { color: #e9efec; }
+  .dark-card input[type="text"] { background: #0c211b; color: #ffffff; border-color: rgba(233,239,236,.28); }
+  .dark-card input[type="text"]:focus-visible { border-color: #d7c98a; }
+  .dark-card .status { color: #a9bdb3; margin: 0; min-height: 0; }
+  .dark-card .status.err { color: #ffb4a8; }
+  .dark-card #loginBtn { background: #d7c98a; color: #12291f; }
+  .dark-card button.secondary { color: #e9efec; border-color: rgba(233,239,236,.3); }
+  .dark-card button:focus-visible { outline-color: #d7c98a; }
+  .privacy-note { color: #8fb8a6; font-size: .84rem; line-height: 1.5; margin: 18px 0 0; }
 
   .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
   .group-title:first-of-type { margin-top: 0; }
@@ -104,9 +124,12 @@
   }
   input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
 
-  .topbar { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: .92rem; margin-bottom: 10px; }
-  .quota { font-weight: 700; }
-  .quota.low { color: var(--ko); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: #0c211b; color: #e9efec; font-size: .92rem; margin: -28px -20px 22px; padding: 14px 20px; }
+  .topbar .brand { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 1.3rem; color: #ffffff; }
+  .topbar-meta { display: grid; justify-items: end; gap: 2px; text-align: right; }
+  .topbar .who { color: #a9bdb3; }
+  .quota { font-weight: 700; color: #d7c98a; }
+  .quota.low { color: #ffb4a8; }
 
   .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .bar h2 { font-size: 1.15rem; margin: 0; }
@@ -158,6 +181,7 @@
     padding: 20px 22px; white-space: pre-wrap;
   }
   @media (max-width: 560px) {
+    .topbar-meta { justify-items: start; text-align: left; width: 100%; }
     .reply { grid-template-columns: auto 1fr; }
     #sendBtn { grid-column: 1 / -1; }
     .msg { max-width: 92%; }
@@ -200,44 +224,52 @@
           <button id="landingStartBtn">Commencer</button>
         </div>
       </div>
-    </div>
 
-    <div class="landing-lower">
-      <div class="landing-feature">
-        <strong>Un jury à deux voix</strong>
-        <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
+      <div class="landing-lower">
+        <div class="landing-feature"><div>
+          <strong>Un jury à deux voix</strong>
+          <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
+        </div></div>
+        <div class="landing-feature"><div>
+          <strong>Aligné sur la grille officielle</strong>
+          <span>Situation 1 de l'E33 : diagnostic, actions de fidélisation, cohérence avec le contexte.</span>
+        </div></div>
+        <div class="landing-feature"><div>
+          <strong>Une évaluation détaillée</strong>
+          <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
+        </div></div>
+        <p class="landing-privacy">Données enregistrées sur un serveur européen. Aucune donnée vendue. Détails sur l'écran de connexion.</p>
       </div>
-      <div class="landing-feature">
-        <strong>Aligné sur la grille officielle</strong>
-        <span>Situation 1 de l'E33 : diagnostic, actions de fidélisation, cohérence avec le contexte.</span>
-      </div>
-      <div class="landing-feature">
-        <strong>Une évaluation détaillée</strong>
-        <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
-      </div>
-      <p class="landing-privacy">Données hébergées en Europe. Aucune donnée vendue ni partagée.</p>
     </div>
   </section>
 
   <!-- Écran 0 : connexion -->
   <section id="screenLogin" class="hidden">
-    <h1 style="margin-bottom:4px;">VocalSales</h1>
-    <p class="tagline">Entraînement à la vente et préparation aux oraux d'examen, face à une IA.</p>
-    <div class="card">
-      <label for="codeInput">Votre code de connexion</label>
-      <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
-      <div id="loginError" class="status err"></div>
-      <div class="actions" style="margin-top:0;">
-        <button id="loginBtn">Se connecter</button>
-        <button class="secondary" id="landingBackBtn" type="button">← Retour</button>
+    <div class="dark-wrap">
+      <div class="dark-inner">
+        <h1>Connexion</h1>
+        <p class="tagline">Saisissez le code que votre enseignant vous a remis.</p>
+        <div class="dark-card">
+          <label for="codeInput">Votre code de connexion</label>
+          <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
+          <div id="loginError" class="status err"></div>
+          <div class="actions" style="margin-top:0;">
+            <button id="loginBtn">Se connecter</button>
+            <button class="secondary" id="landingBackBtn" type="button">← Retour</button>
+          </div>
+        </div>
+        <p class="privacy-note"><strong>Confidentialité.</strong> Votre voix est transcrite par votre navigateur, qui peut envoyer l'audio à son éditeur. Le texte est ensuite traité par des services d'IA (Anthropic pour le jury et l'évaluation, OpenAI pour la voix du jury). Votre nom, votre transcription et votre évaluation sont enregistrés pour le suivi pédagogique de votre enseignant, sur un serveur situé en Europe. Rien n'est vendu.</p>
       </div>
     </div>
   </section>
 
   <div id="app" class="hidden">
     <div class="topbar">
-      <span id="whoami"></span>
-      <span class="quota" id="quota"></span>
+      <span class="brand">VocalSales</span>
+      <div class="topbar-meta">
+        <span class="who" id="whoami"></span>
+        <span class="quota" id="quota"></span>
+      </div>
     </div>
 
     <!-- Écran 1 : choix du scénario -->
@@ -266,7 +298,7 @@
 
         <label style="font-weight:400; color:var(--muted);">Tester votre micro (gratuit, ne compte pas dans votre temps)</label>
         <div class="pres-actions">
-          <button class="secondary" id="testMicBtn" type="button">🎙️ Maintenir pour tester</button>
+          <button class="secondary" id="testMicBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>Maintenir pour tester</button>
         </div>
         <p id="testMicPreview" style="margin:0; color:var(--muted); min-height:1.4em;"></p>
 
@@ -285,7 +317,7 @@
         <div class="timer" id="presTimer">10:00</div>
         <textarea id="presTranscript" placeholder="Votre présentation apparaîtra ici au fur et à mesure que vous parlez…"></textarea>
         <div class="pres-actions">
-          <button id="presMicBtn" title="Parler">🎙️ Parler</button>
+          <button id="presMicBtn" title="Parler"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>Parler</button>
           <button id="presDoneBtn">J'ai terminé ma présentation →</button>
         </div>
         <div class="status" id="presStatus"></div>
@@ -296,13 +328,13 @@
     <section id="screenChat" class="hidden">
       <div class="bar">
         <h2 id="scenarioTitle"></h2>
-        <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique">🔁 Réécouter</button>
+        <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réécouter</button>
       </div>
       <div class="chat" id="chat" aria-live="polite"></div>
       <div class="status" id="status"></div>
-      <button class="secondary hidden" id="retryBtn" type="button">🔁 Réessayer l'envoi</button>
+      <button class="secondary hidden" id="retryBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réessayer l'envoi</button>
       <div class="reply">
-        <button id="micBtn" title="Maintenir appuyé pour répondre" aria-label="Maintenir appuyé pour répondre au micro">🎙️</button>
+        <button id="micBtn" title="Maintenir appuyé pour répondre" aria-label="Maintenir appuyé pour répondre au micro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>
         <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
         <button id="sendBtn">Envoyer</button>
       </div>
@@ -317,7 +349,7 @@
       <h2>Votre évaluation</h2>
       <div class="debrief" id="debrief">Analyse en cours…</div>
       <div class="actions">
-        <button class="secondary" id="printBtn">🖨️ Enregistrer en PDF</button>
+        <button class="secondary" id="printBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>Enregistrer en PDF</button>
         <button id="againBtn">Recommencer</button>
       </div>
     </section>
@@ -337,7 +369,7 @@ async function apiStatus(code) {
 function renderQuota(s) {
   const el = document.getElementById("quota");
   el.textContent = s.avertissement
-    ? "⚠️ Il ne vous reste que " + s.minutesRestantes + " min ce mois-ci (sur " + s.minutesLimite + " min)"
+    ? "Attention : il ne vous reste que " + s.minutesRestantes + " min ce mois-ci (sur " + s.minutesLimite + " min)"
     : "Temps restant ce mois-ci : " + s.minutesRestantes + " min / " + s.minutesLimite + " min";
   el.classList.toggle("low", s.minutesRestantes <= 10);
 }
@@ -630,7 +662,7 @@ async function sellerSays(text) {
   turns.push({ role: "user", content: text });
   $("input").value = "";
   setBusy(true);
-  setStatus("⏳ Le jury réfléchit…");
+  setStatus("Le jury réfléchit…");
   playAck();
 
   try {
@@ -645,7 +677,7 @@ async function sellerSays(text) {
     const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
     lastMembre = membre;
     addMsg("client", line, membre);
-    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setStatus("" + scenario.aiLabel + " parle…");
     setBusy(false);
     refreshQuota();
     if (etat === "conclu") { finished = true; setBusy(false); }
@@ -654,7 +686,7 @@ async function sellerSays(text) {
       addMsg("note", "L'oral est terminé.");
       setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
     } else {
-      setStatus("À vous : maintenez le micro 🎙️ appuyé pour répondre, ou tapez au clavier.");
+      setStatus("À vous : maintenez le bouton micro appuyé pour répondre, ou tapez au clavier.");
     }
   } catch (e) {
     turns.pop();
@@ -669,12 +701,19 @@ async function sellerSays(text) {
 }
 $("retryBtn").onclick = () => sellerSays($("input").value);
 
+const MIN_EXCHANGES_FOR_EVAL = 5; // le jury vise 5 à 7 vrais échanges avant de conclure
+
 async function evaluate() {
+  const sellerTurns = turns.filter(t => t.role === "user").length;
+  const echanges = Math.max(0, sellerTurns - 1); // hors présentation initiale
+  if (!finished && sellerTurns >= 2 && echanges < MIN_EXCHANGES_FOR_EVAL) {
+    const ok = confirm("L'entretien est encore court (" + echanges + " réponse" + (echanges > 1 ? "s" : "") + " seulement). Le jour de l'épreuve, il dure environ 10 minutes.\n\nTerminer quand même et obtenir une évaluation ?");
+    if (!ok) return;
+  }
   stopSpeaking();
   if (recognition && listening) recognition.stop();
   showScreen("debrief");
   const box = $("debrief");
-  const sellerTurns = turns.filter(t => t.role === "user").length;
   if (sellerTurns < 2) {
     box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
     return;
@@ -719,7 +758,7 @@ TES POINTS FORTS
 CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;
 
-  box.textContent = "⏳ Analyse en cours… (jusqu'à une minute)";
+  box.textContent = "Analyse en cours… (jusqu'à une minute)";
   try {
     box.textContent = await apiEvaluate(prompt, scenario.title, transcript);
     refreshQuota();
@@ -755,13 +794,13 @@ if (SR) {
     listening = true;
     if (micMode === "presentation") {
       $("presMicBtn").classList.add("listening");
-      $("presStatus").textContent = "🔴 Je vous écoute…";
+      $("presStatus").textContent = "Je vous écoute…";
     } else if (micMode === "test") {
       $("testMicBtn").classList.add("listening");
-      $("testMicPreview").textContent = "🔴 Je vous écoute…";
+      $("testMicPreview").textContent = "Je vous écoute…";
     } else {
       $("micBtn").classList.add("listening");
-      setStatus("🔴 Je vous écoute… relâchez le micro pour envoyer.");
+      setStatus("Je vous écoute… relâchez le micro pour envoyer.");
     }
   };
   recognition.onresult = (e) => {
@@ -774,7 +813,7 @@ if (SR) {
       $("presTranscript").value = (presBase + finalText + interim).trim();
       saveDraft($("presTranscript").value);
     } else if (micMode === "test") {
-      $("testMicPreview").textContent = (finalText + interim).trim() || "🔴 Je vous écoute…";
+      $("testMicPreview").textContent = (finalText + interim).trim() || "Je vous écoute…";
     } else {
       $("input").value = (finalText + interim).trim();
     }
@@ -974,7 +1013,7 @@ function beginPresentationPhase() {
     const elapsed = 600 - presRemaining;
     if (!silenceWarningShown && elapsed === SILENCE_WARNING_AFTER_SECONDS && !$("presTranscript").value.trim()) {
       silenceWarningShown = true;
-      $("presStatus").textContent = "⚠️ Rien n'a encore été capté depuis 1 min 30 — vérifiez que votre micro fonctionne, ou continuez au clavier.";
+      $("presStatus").textContent = "Attention : rien n'a encore été capté depuis 1 min 30 — vérifiez que votre micro fonctionne, ou continuez au clavier.";
     }
     if (presRemaining <= 0) finishPresentation();
   }, 1000);
@@ -992,7 +1031,7 @@ async function finishPresentation() {
   $("scenarioTitle").textContent = scenario.title;
   addMsg("seller", presentationText || "(aucune présentation enregistrée)");
   setBusy(true);
-  setStatus("⏳ Le jury réfléchit…");
+  setStatus("Le jury réfléchit…");
   playAck();
 
   turns = [{
@@ -1011,11 +1050,11 @@ async function finishPresentation() {
     const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
     lastMembre = membre;
     addMsg("client", line, membre);
-    setStatus("🔊 " + scenario.aiLabel + " parle…");
+    setStatus("" + scenario.aiLabel + " parle…");
     setBusy(false);
     refreshQuota();
     await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
-    if (!finished) setStatus("À vous : maintenez le micro 🎙️ appuyé pour répondre, ou tapez au clavier.");
+    if (!finished) setStatus("À vous : maintenez le bouton micro appuyé pour répondre, ou tapez au clavier.");
     $("input").focus();
   } catch (e) {
     setBusy(false);
@@ -1036,7 +1075,7 @@ async function start(s) {
     addMsg("client", seg.text, seg.membre);
     lastClientLine = seg.text;
     lastMembre = seg.membre;
-    setStatus("🔊 Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
+    setStatus("Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
     await speak(seg.text, s.genderByMembre[seg.membre]);
   }
   beginPresentationPhase();

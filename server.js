@@ -85,19 +85,27 @@ app.use(express.static(path.join(__dirname, "public")));
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 }
-async function findStudentInSupabase(code) {
-  if (!supabaseConfigured()) return null;
+// Résultat : { status: "found", student } | { status: "absent" } | { status: "indisponible" }
+// "absent" = la base répond et ce code n'existe pas (ou n'est plus actif) : refus net.
+// "indisponible" = la base ne répond pas (panne, mise en pause) : seul cas où l'on
+// se rabat sur l'ancien fichier CSV, pour ne pas bloquer tous les élèves.
+async function lookupStudent(code, { activeOnly = true } = {}) {
+  if (!supabaseConfigured()) return { status: "indisponible" };
   try {
+    const filter = activeOnly ? "&active=eq.true" : "";
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}&active=eq.true&select=code,nom`,
+      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}${filter}&select=code,nom,active`,
       { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } }
     );
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.error("Base élèves : réponse HTTP", r.status);
+      return { status: "indisponible" };
+    }
     const rows = await r.json();
-    return rows[0] || null;
+    return rows[0] ? { status: "found", student: rows[0] } : { status: "absent" };
   } catch (e) {
     console.error("Erreur lecture élève Supabase:", e && e.message);
-    return null; // en cas de souci réseau, on retombe sur le CSV plutôt que de bloquer l'élève
+    return { status: "indisponible" };
   }
 }
 
@@ -105,14 +113,18 @@ async function requireStudent(req, res, next) {
   const code = String(req.body.code || req.query.code || "").trim();
   if (!code) return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
 
-  const fromSupabase = await findStudentInSupabase(code);
-  if (fromSupabase) {
+  const found = await lookupStudent(code);
+  if (found.status === "found") {
     req.studentCode = code;
-    req.studentName = fromSupabase.nom;
+    req.studentName = found.student.nom;
     return next();
   }
+  if (found.status === "absent") {
+    return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
+  }
 
-  const students = loadStudents(); // repli : ancien fichier CSV
+  // Base indisponible : repli sur l'ancien fichier CSV
+  const students = loadStudents();
   if (!students.has(code)) {
     return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
   }
@@ -162,8 +174,11 @@ function checkTeacherPassword(req, res) {
 async function generateUniqueCode() {
   for (let i = 0; i < 20; i++) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    const existing = await findStudentInSupabase(code);
-    if (!existing) return code;
+    // On vérifie parmi TOUS les codes, y compris désactivés : un code désactivé
+    // ne doit jamais être réattribué à quelqu'un d'autre.
+    const existing = await lookupStudent(code, { activeOnly: false });
+    if (existing.status === "absent") return code;
+    if (existing.status === "indisponible") throw new Error("Base élèves indisponible.");
   }
   throw new Error("Impossible de générer un code unique après 20 essais.");
 }

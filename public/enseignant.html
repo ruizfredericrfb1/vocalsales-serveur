@@ -92,6 +92,24 @@
         <tbody id="studentsBody"></tbody>
       </table>
     </div>
+
+    <div class="card">
+      <h2 style="margin:0;">Point hebdomadaire — Compétence de la semaine</h2>
+      <p id="currentFocus" style="margin:0; color:var(--muted);">Chargement…</p>
+      <label for="focusSelect">Choisir la compétence à travailler cette semaine</label>
+      <select id="focusSelect"></select>
+      <button id="focusSetBtn">Définir pour toute la classe</button>
+      <div id="focusSetStatus" class="status"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0;">Positionnements récents (E31/E32)</h2>
+      <div id="posListStatus" class="status">Chargement…</div>
+      <table id="posTable" class="hidden">
+        <thead><tr><th>Élève</th><th>Compétence</th><th>Niveau</th><th>Date</th></tr></thead>
+        <tbody id="posBody"></tbody>
+      </table>
+    </div>
   </div>
 </main>
 
@@ -128,6 +146,73 @@ async function loadStudents() {
   }
 }
 
+let competences = [];
+async function loadCompetencesSelect() {
+  try {
+    const r = await fetch("/api/competences"); // référentiel public, pas besoin de mot de passe
+    competences = await r.json();
+    $("focusSelect").innerHTML = competences.map(c =>
+      `<option value="${c.code}">${c.epreuve} — ${c.code} — ${c.libelle}</option>`
+    ).join("");
+  } catch (e) { /* la liste reste vide, tant pis */ }
+}
+
+async function loadCurrentFocus() {
+  $("currentFocus").textContent = "Chargement…";
+  try {
+    const f = await api("/api/teacher/weekly-focus");
+    $("currentFocus").textContent = f.code
+      ? "Actuellement : " + f.code + " — " + (f.libelle || "")
+      : "Aucune compétence définie pour l'instant.";
+    if (f.code) $("focusSelect").value = f.code;
+  } catch (e) {
+    $("currentFocus").textContent = e.message || "Impossible de charger la compétence actuelle.";
+  }
+}
+
+$("focusSetBtn").onclick = async () => {
+  $("focusSetStatus").textContent = "";
+  $("focusSetStatus").classList.remove("err");
+  $("focusSetBtn").disabled = true;
+  try {
+    const code = $("focusSelect").value;
+    await api("/api/teacher/weekly-focus", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+    $("focusSetStatus").textContent = "Compétence mise à jour pour toute la classe.";
+    loadCurrentFocus();
+  } catch (e) {
+    $("focusSetStatus").textContent = e.message || "Erreur lors de l'enregistrement.";
+    $("focusSetStatus").classList.add("err");
+  } finally {
+    $("focusSetBtn").disabled = false;
+  }
+};
+
+async function loadPositionnements() {
+  $("posListStatus").textContent = "Chargement…";
+  $("posListStatus").classList.remove("err");
+  $("posTable").classList.add("hidden");
+  try {
+    const rows = await api("/api/teacher/positionnements");
+    $("posBody").innerHTML = rows.map(p => {
+      const date = p.created_at ? new Date(p.created_at).toLocaleDateString("fr-FR") : "";
+      return `<tr>
+        <td>${p.student_name || p.student_code}</td>
+        <td>${p.competence_code}</td>
+        <td>${p.niveau_global || "—"}</td>
+        <td>${date}</td>
+      </tr>`;
+    }).join("");
+    $("posListStatus").textContent = rows.length ? "" : "Aucun positionnement enregistré pour l'instant.";
+    $("posTable").classList.toggle("hidden", rows.length === 0);
+  } catch (e) {
+    $("posListStatus").textContent = e.message || "Impossible de charger les positionnements.";
+    $("posListStatus").classList.add("err");
+  }
+}
+
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;
   $("loginError").textContent = "";
@@ -136,6 +221,8 @@ $("loginBtn").onclick = async () => {
     $("screenLogin").classList.add("hidden");
     $("app").classList.remove("hidden");
     loadStudents();
+    loadCompetencesSelect().then(loadCurrentFocus);
+    loadPositionnements();
   } catch (e) {
     $("loginError").textContent = e.message || "Mot de passe incorrect.";
   }

@@ -1,1106 +1,866 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>VocalSales — Simulateur de vente</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Newsreader:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
-    --accent: #1f6f5c; --accent-ink: #ffffff; --client: #e3ebe8; --seller: #1f6f5c; --seller-ink: #ffffff;
-    --ok: #1d7a3e; --ko: #b3261e; --line: #cfdad6; --rec: #c0392b;
+// VocalSales — serveur
+// Garde la clé API Anthropic côté serveur (jamais visible des élèves),
+// vérifie le code de connexion de chaque élève, et applique un quota
+// mensuel (par défaut 85 minutes par mois civil).
+
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+
+const PORT = process.env.PORT || 3000;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
+const MONTHLY_LIMIT_MINUTES = Number(process.env.MONTHLY_LIMIT_MINUTES || 85);
+// Seuil (en minutes restantes) en dessous duquel on avertit explicitement l'élève.
+const WARNING_THRESHOLD_MINUTES = Number(process.env.WARNING_THRESHOLD_MINUTES || 5);
+// Supabase (facultatif) : garde un historique permanent des évaluations.
+// Si absent, tout continue de fonctionner normalement, juste sans historique.
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
+// Mot de passe pour la page enseignant (gestion des élèves sans passer par GitHub).
+const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "ORT2026";
+// Voix OpenAI (facultatif) : si absent, le navigateur utilise sa propre voix.
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
+// Vitesse d'élocution (0.25 à 4.0 ; 1.0 = normal). Réglable via OPENAI_TTS_SPEED.
+const OPENAI_TTS_SPEED = Number(process.env.OPENAI_TTS_SPEED || 1.15);
+// Coût estimé (en minutes de quota) de chaque type d'appel.
+const COST_TURN = 1;
+const COST_EVAL = 3;
+const COST_POSITIONNEMENT = 2; // point hebdomadaire E31/E32 : plus court qu'une évaluation E33
+
+const STUDENTS_FILE = path.join(__dirname, "students.csv");
+const USAGE_FILE = path.join(__dirname, "data", "usage.json");
+
+if (!fs.existsSync(path.dirname(USAGE_FILE))) fs.mkdirSync(path.dirname(USAGE_FILE), { recursive: true });
+if (!fs.existsSync(USAGE_FILE)) fs.writeFileSync(USAGE_FILE, "{}");
+
+function loadStudents() {
+  const raw = fs.readFileSync(STUDENTS_FILE, "utf8").trim().split("\n").slice(1);
+  const map = new Map();
+  for (const line of raw) {
+    const [code, ...rest] = line.split(",");
+    if (!code) continue;
+    map.set(code.trim(), rest.join(",").trim() || "Élève");
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
-      --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
-      --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
-    --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
-    --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
-  }
-  *, *::before, *::after { box-sizing: inherit; }
-  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
-    font-size: 18px; line-height: 1.5;
-  }
-  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 48px; }
-  h1 { font-size: 1.8rem; margin: 0; }
-  .tagline { color: var(--muted); margin: 4px 0 24px; }
-  .hidden { display: none !important; }
-  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: #0c211b; }
-  .ico { width: 1.15em; height: 1.15em; vertical-align: -0.2em; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  button .ico { margin-right: .45em; }
-  #micBtn .ico { margin-right: 0; width: 1.6rem; height: 1.6rem; vertical-align: middle; }
-  h2, .group-title, .scenario strong { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
-  /* Bandes sombres pleine largeur (sans changer la mise en page de la colonne centrale) */
-  .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #0c211b; clip-path: inset(0 -100vmax); }
-
-  /* ---------- Page d'accueil : hero sombre, ancré dans l'oral lui-même ---------- */
-  .landing-hero-wrap {
-    background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 40px;
-  }
-  .landing-hero { max-width: 640px; margin: 0 auto; }
-  .landing-badge {
-    display: inline-block; border: 1px solid rgba(233,239,236,.3); color: #cfe3da;
-    font-size: .82rem; font-weight: 400; padding: 5px 14px; border-radius: 999px;
-    margin-bottom: 22px;
-  }
-  .landing-hero h1 {
-    font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.5rem;
-    line-height: 1.15; margin: 0 0 14px; color: #ffffff; letter-spacing: -.01em;
-  }
-  .landing-hero .tagline { color: #a9bdb3; font-size: 1.08rem; max-width: 46ch; margin: 0 0 32px; }
-
-  .landing-transcript {
-    background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px;
-    padding: 18px 20px; margin-bottom: 30px; display: grid; gap: 14px;
-  }
-  .landing-line { display: grid; gap: 3px; }
-  .landing-line .who { font-size: .78rem; color: #7fae9a; }
-  .landing-line .said { font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eef4f0; }
-  .landing-line.candidat .who { color: #d7c98a; }
-  .landing-line.candidat .said { color: #f4efdd; }
-
-  .landing-hero .actions { margin: 0; }
-  #landingStartBtn { background: #d7c98a; color: #12291f; }
-  #landingStartBtn:hover { background: #e3d7a3; }
-
-  .landing-lower { max-width: 640px; margin: 44px auto 0; padding-top: 8px; border-top: 1px solid rgba(233,239,236,.12); }
-  .landing-feature { display: grid; grid-template-columns: 3px 1fr; gap: 16px; padding: 16px 0; }
-  .landing-feature::before { content: ""; background: #3f6c5a; border-radius: 2px; }
-  .landing-feature strong { display: block; font-size: 1.02rem; color: #ffffff; margin-bottom: 3px; }
-  .landing-feature span { display: block; color: #a9bdb3; font-size: .92rem; }
-  .landing-feature + .landing-feature { border-top: 1px solid rgba(233,239,236,.1); }
-  .landing-privacy { color: #8fb8a6; font-size: .85rem; margin: 10px 0 0; }
-
-  .dark-wrap { background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 48px; }
-  .dark-inner { max-width: 640px; margin: 0 auto; }
-  .dark-wrap h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.2rem; line-height: 1.15; color: #ffffff; margin: 0 0 10px; }
-  .dark-wrap .tagline { color: #a9bdb3; margin: 0 0 26px; }
-  .dark-card { background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; }
-  .dark-card label { color: #e9efec; }
-  .dark-card input[type="text"] { background: #0c211b; color: #ffffff; border-color: rgba(233,239,236,.28); }
-  .dark-card input[type="text"]:focus-visible { border-color: #d7c98a; }
-  .dark-card .status { color: #a9bdb3; margin: 0; min-height: 0; }
-  .dark-card .status.err { color: #ffb4a8; }
-  .dark-card #loginBtn { background: #d7c98a; color: #12291f; }
-  .dark-card button.secondary { color: #e9efec; border-color: rgba(233,239,236,.3); }
-  .dark-card button:focus-visible { outline-color: #d7c98a; }
-  .privacy-note { color: #8fb8a6; font-size: .84rem; line-height: 1.5; margin: 18px 0 0; }
-
-  .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
-  .group-title:first-of-type { margin-top: 0; }
-  .group-hint { color: var(--muted); margin: -6px 0 12px; font-size: .95rem; }
-
-  .scenarios { display: grid; gap: 12px; }
-  .scenario {
-    text-align: left; background: var(--card); color: var(--ink);
-    border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px;
-    font: inherit; cursor: pointer; display: grid; gap: 4px;
-  }
-  .scenario:hover, .scenario:focus-visible { border-color: var(--accent); outline: none; }
-  .scenario strong { font-size: 1.1rem; }
-  .scenario span { color: var(--muted); font-size: .95rem; }
-
-  .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 20px 22px; display: grid; gap: 12px;
-  }
-  label { font-weight: 700; }
-  select, input[type="text"] {
-    font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line);
-    background: var(--card); color: var(--ink);
-  }
-  input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
-
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: #0c211b; color: #e9efec; font-size: .92rem; margin: -28px -20px 22px; padding: 14px 20px; }
-  .topbar .brand { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 1.3rem; color: #ffffff; }
-  .topbar-meta { display: grid; justify-items: end; gap: 2px; text-align: right; }
-  .topbar .who { color: #a9bdb3; }
-  .quota { font-weight: 700; color: #d7c98a; }
-  .quota.low { color: #ffb4a8; }
-
-  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .bar h2 { font-size: 1.15rem; margin: 0; }
-  .chat {
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 18px; height: min(52vh, 460px); overflow-y: auto;
-    display: flex; flex-direction: column; gap: 12px;
-  }
-  .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; }
-  .msg small { display: block; font-size: .78rem; opacity: .75; margin-bottom: 2px; font-weight: 700; }
-  .msg.client { background: var(--client); align-self: flex-start; border-bottom-left-radius: 4px; }
-  .msg.seller { background: var(--seller); color: var(--seller-ink); align-self: flex-end; border-bottom-right-radius: 4px; }
-  .msg.note { align-self: center; background: transparent; color: var(--muted); font-style: italic; font-size: .95rem; }
-
-  .status { min-height: 1.6em; margin: 10px 2px; color: var(--muted); font-weight: 700; }
-  .status.err { color: var(--ko); }
-
-  .reply { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: stretch; }
-  textarea {
-    font: inherit; resize: none; min-height: 56px; padding: 12px 14px;
-    border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--ink);
-  }
-  textarea:focus-visible { outline: none; border-color: var(--accent); }
-  button {
-    font: inherit; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer;
-    padding: 12px 18px; background: var(--accent); color: var(--accent-ink);
-  }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-  button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
-  #micBtn { min-width: 64px; font-size: 1.4rem; touch-action: none; user-select: none; -webkit-user-select: none; }
-
-  .timer {
-    font-size: 2.4rem; font-weight: 700; text-align: center;
-    font-variant-numeric: tabular-nums; color: var(--accent);
-    padding: 6px 0;
-  }
-  .timer.urgent { color: var(--rec); }
-  #presTranscript { min-height: 220px; resize: vertical; }
-  .pres-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-  #presMicBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
-  #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: .65; } }
-  @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
-  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-
-  .debrief {
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 20px 22px; white-space: pre-wrap;
-  }
-  @media (max-width: 560px) {
-    .topbar-meta { justify-items: start; text-align: left; width: 100%; }
-    .reply { grid-template-columns: auto 1fr; }
-    #sendBtn { grid-column: 1 / -1; }
-    .msg { max-width: 92%; }
-  }
-
-  /* Impression / export PDF : uniquement le texte de l'évaluation, en noir sur blanc */
-  @media print {
-    body * { visibility: hidden; }
-    #debrief, #debrief * { visibility: visible; }
-    #debrief { position: absolute; top: 0; left: 0; width: 100%; background: #fff; color: #000; }
-  }
-</style>
-</head>
-<body>
-<main>
-  <!-- Écran -1 : accueil / présentation -->
-  <section id="screenLanding">
-    <div class="landing-hero-wrap">
-      <div class="landing-hero">
-        <div class="landing-badge">Bac Pro MCV — Épreuve E33, Situation 1</div>
-        <h1>L'entretien commence maintenant.</h1>
-        <p class="tagline">Un jury virtuel vous interroge sur votre action de fidélisation, dans les conditions réelles de l'oral.</p>
-
-        <div class="landing-transcript">
-          <div class="landing-line">
-            <span class="who">Le jury — professeur(e)</span>
-            <span class="said">« Vous avez mentionné le SWOT — quelle est la principale menace que vous avez identifiée ? »</span>
-          </div>
-          <div class="landing-line candidat">
-            <span class="who">Vous</span>
-            <span class="said">« Alors, la principale menace... c'est l'arrivée d'une enseigne concurrente à 200 mètres. »</span>
-          </div>
-          <div class="landing-line">
-            <span class="who">Le jury — professionnel(le)</span>
-            <span class="said">« Et concrètement, comment votre première action y répond ? »</span>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button id="landingStartBtn">Commencer</button>
-        </div>
-      </div>
-
-      <div class="landing-lower">
-        <div class="landing-feature"><div>
-          <strong>Un jury à deux voix</strong>
-          <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
-        </div></div>
-        <div class="landing-feature"><div>
-          <strong>Aligné sur la grille officielle</strong>
-          <span>Situation 1 de l'E33 : diagnostic, actions de fidélisation, cohérence avec le contexte.</span>
-        </div></div>
-        <div class="landing-feature"><div>
-          <strong>Une évaluation détaillée</strong>
-          <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
-        </div></div>
-        <p class="landing-privacy">Données enregistrées sur un serveur européen. Aucune donnée vendue. Détails sur l'écran de connexion.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Écran 0 : connexion -->
-  <section id="screenLogin" class="hidden">
-    <div class="dark-wrap">
-      <div class="dark-inner">
-        <h1>Connexion</h1>
-        <p class="tagline">Saisissez le code que votre enseignant vous a remis.</p>
-        <div class="dark-card">
-          <label for="codeInput">Votre code de connexion</label>
-          <input id="codeInput" type="text" inputmode="numeric" placeholder="Ex : 2461" autocomplete="off">
-          <div id="loginError" class="status err"></div>
-          <div class="actions" style="margin-top:0;">
-            <button id="loginBtn">Se connecter</button>
-            <button class="secondary" id="landingBackBtn" type="button">← Retour</button>
-          </div>
-        </div>
-        <p class="privacy-note"><strong>Confidentialité.</strong> Votre voix est transcrite par votre navigateur, qui peut envoyer l'audio à son éditeur. Le texte est ensuite traité par des services d'IA (Anthropic pour le jury et l'évaluation, OpenAI pour la voix du jury). Votre nom, votre transcription et votre évaluation sont enregistrés pour le suivi pédagogique de votre enseignant, sur un serveur situé en Europe. Rien n'est vendu.</p>
-      </div>
-    </div>
-  </section>
-
-  <div id="app" class="hidden">
-    <div class="topbar">
-      <span class="brand">VocalSales</span>
-      <div class="topbar-meta">
-        <span class="who" id="whoami"></span>
-        <span class="quota" id="quota"></span>
-      </div>
-    </div>
-
-    <!-- Écran 1 : choix du scénario -->
-    <section id="screenSetup">
-      <h2 class="group-title">Se préparer à un oral d'examen</h2>
-      <p class="group-hint">Un jury vous interroge sur une situation de vente que vous avez préparée.</p>
-      <div class="scenarios" id="scenarioListExamen"></div>
-    </section>
-
-    <!-- Écran 1bis : préparation de l'oral d'examen -->
-    <section id="screenPrep" class="hidden">
-      <div class="card">
-        <h2 id="prepTitle" style="margin:0;">Avant l'oral</h2>
-        <p style="margin:0; color:var(--muted);">Vous allez d'abord <strong>présenter votre situation pendant 10 minutes maximum, sans interruption du jury</strong> — exactement comme le jour de l'épreuve. L'entretien avec le jury suivra ensuite, à partir de ce que vous aurez présenté.</p>
-        <p style="margin:0; color:var(--muted); font-size:.92rem;">Le jury est composé de deux personnes, comme le jour de l'examen : votre professeur(e) d'économie-gestion, et un(e) professionnel(le) du secteur commerce/vente.</p>
-        <label for="prepGenderProf" style="font-weight:400; color:var(--muted);">Voix du professeur / de la professeure</label>
-        <select id="prepGenderProf">
-          <option value="female">Une professeure</option>
-          <option value="male">Un professeur</option>
-        </select>
-        <label for="prepGenderPro" style="font-weight:400; color:var(--muted);">Voix du professionnel / de la professionnelle</label>
-        <select id="prepGenderPro">
-          <option value="male">Un professionnel</option>
-          <option value="female">Une professionnelle</option>
-        </select>
-
-        <label style="font-weight:400; color:var(--muted);">Tester votre micro (gratuit, ne compte pas dans votre temps)</label>
-        <div class="pres-actions">
-          <button class="secondary" id="testMicBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>Maintenir pour tester</button>
-        </div>
-        <p id="testMicPreview" style="margin:0; color:var(--muted); min-height:1.4em;"></p>
-
-        <div class="actions" style="margin-top:0;">
-          <button id="prepStartBtn">Je suis prêt, commencer l'oral</button>
-          <button class="secondary" id="prepBackBtn">Retour</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Écran 1ter : présentation chronométrée, sans intervention du jury -->
-    <section id="screenPresentation" class="hidden">
-      <div class="card">
-        <h2 style="margin:0;">Votre présentation</h2>
-        <p style="margin:0; color:var(--muted);">Le jury vous écoute sans vous interrompre. Parlez au micro — votre présentation s'écrit ci-dessous au fur et à mesure ; vous pouvez aussi la corriger ou la compléter au clavier. Cliquez sur « J'ai terminé » quand vous avez fini, avant la fin du temps si besoin.</p>
-        <div class="timer" id="presTimer">10:00</div>
-        <textarea id="presTranscript" placeholder="Votre présentation apparaîtra ici au fur et à mesure que vous parlez…"></textarea>
-        <div class="pres-actions">
-          <button id="presMicBtn" title="Parler"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>Parler</button>
-          <button id="presDoneBtn">J'ai terminé ma présentation →</button>
-        </div>
-        <div class="status" id="presStatus"></div>
-      </div>
-    </section>
-
-    <!-- Écran 2 : la vente / l'oral -->
-    <section id="screenChat" class="hidden">
-      <div class="bar">
-        <h2 id="scenarioTitle"></h2>
-        <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réécouter</button>
-      </div>
-      <div class="chat" id="chat" aria-live="polite"></div>
-      <div class="status" id="status"></div>
-      <button class="secondary hidden" id="retryBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réessayer l'envoi</button>
-      <div class="reply">
-        <button id="micBtn" title="Maintenir appuyé pour répondre" aria-label="Maintenir appuyé pour répondre au micro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></button>
-        <textarea id="input" placeholder="Ou tapez votre réponse ici, puis Entrée…" aria-label="Votre réponse"></textarea>
-        <button id="sendBtn">Envoyer</button>
-      </div>
-      <div class="actions">
-        <button id="endBtn">Terminer et voir mon évaluation</button>
-        <button class="secondary" id="quitBtn">Changer de situation</button>
-      </div>
-    </section>
-
-    <!-- Écran 3 : l'évaluation -->
-    <section id="screenDebrief" class="hidden">
-      <h2>Votre évaluation</h2>
-      <div class="debrief" id="debrief">Analyse en cours…</div>
-      <div class="actions">
-        <button class="secondary" id="printBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>Enregistrer en PDF</button>
-        <button id="againBtn">Recommencer</button>
-      </div>
-    </section>
-  </div>
-</main>
-
-<script>
-/* ---------- Connexion élève ---------- */
-let studentCode = null;
-
-async function apiStatus(code) {
-  const r = await fetch("/api/status?code=" + encodeURIComponent(code));
-  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || "Code invalide."); }
-  return r.json();
+  return map;
 }
 
-function renderQuota(s) {
-  const el = document.getElementById("quota");
-  el.textContent = s.avertissement
-    ? "Attention : il ne vous reste que " + s.minutesRestantes + " min ce mois-ci (sur " + s.minutesLimite + " min)"
-    : "Temps restant ce mois-ci : " + s.minutesRestantes + " min / " + s.minutesLimite + " min";
-  el.classList.toggle("low", s.minutesRestantes <= 10);
+function loadUsage() {
+  try { return JSON.parse(fs.readFileSync(USAGE_FILE, "utf8")); } catch { return {}; }
+}
+function saveUsage(u) {
+  // Écriture atomique : on écrit dans un fichier temporaire puis on le
+  // renomme, pour ne jamais laisser un fichier à moitié écrit en cas de
+  // plantage pile pendant la sauvegarde.
+  const tmp = USAGE_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
+  fs.renameSync(tmp, USAGE_FILE);
+}
+function monthKey(d = new Date()) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-document.getElementById("landingStartBtn").onclick = () => {
-  document.getElementById("screenLanding").classList.add("hidden");
-  document.getElementById("screenLogin").classList.remove("hidden");
-  document.getElementById("codeInput").focus();
-};
-document.getElementById("landingBackBtn").onclick = () => {
-  document.getElementById("screenLogin").classList.add("hidden");
-  document.getElementById("screenLanding").classList.remove("hidden");
+function getStudentUsage(code) {
+  const usage = loadUsage();
+  const month = monthKey();
+  const entry = usage[code];
+  if (!entry || entry.month !== month) return { usage, month, minutes: 0 };
+  return { usage, month, minutes: entry.minutes };
+}
+
+function consumeQuota(code, cost) {
+  const { usage, month, minutes } = getStudentUsage(code);
+  const next = minutes + cost;
+  usage[code] = { month, minutes: next };
+  saveUsage(usage);
+  return next;
+}
+
+/* ---------- Référentiel E31/E32 (point hebdomadaire) ----------
+   Source : grilles officielles CCF Bac Pro MCV (Vente-conseil E31,
+   Suivi des ventes E32). Échelle à 4 niveaux nommés, comme sur les
+   grilles réelles : Novice / Débrouillé / Averti / Expert. */
+const NIVEAUX = ["Novice", "Débrouillé", "Averti", "Expert"];
+
+const COMMUNICATION_CRITERE = {
+  nom: "Adaptation de la communication verbale et non verbale au contexte de la vente",
+  niveaux: [
+    "S'exprime avec difficulté en n'adaptant pas sa communication non verbale",
+    "S'exprime avec des approximations concernant la clarté de ses propos et sa communication non verbale",
+    "S'exprime clairement et met en œuvre une communication non verbale adaptée",
+    "S'exprime clairement et met en œuvre un vocabulaire et une communication non verbale professionnels et adaptés au contexte de la vente"
+  ]
 };
 
-document.getElementById("loginBtn").onclick = async () => {
-  const code = document.getElementById("codeInput").value.trim();
-  const err = document.getElementById("loginError");
-  err.textContent = "";
-  if (!code) return;
+const COMPETENCES_E31E32 = {
+  "C1.1": {
+    bloc: 1, epreuve: "E31", libelle: "Assurer la veille commerciale",
+    criteres: [{
+      nom: "Qualité, maîtrise et utilisation pertinente des informations relevées et sélectionnées sur le marché, l'entreprise et ses produits",
+      niveaux: [
+        "Ne collecte pas les informations issues du marché, de l'entreprise et de ses produits",
+        "Collecte des informations partielles et/ou imprécises",
+        "Collecte, hiérarchise et sélectionne correctement les informations",
+        "Collecte, hiérarchise, sélectionne correctement les informations et les exploite de façon pertinente"
+      ]
+    }]
+  },
+  "C1.2": {
+    bloc: 1, epreuve: "E31", libelle: "Réaliser la vente dans un cadre omnicanal",
+    criteres: [
+      {
+        nom: "Qualité du questionnement, de l'écoute et de la reformulation des besoins du client",
+        niveaux: [
+          "Ne questionne pas et n'est pas à l'écoute des besoins du client",
+          "Réalise un questionnement imprécis et pratique une écoute superficielle",
+          "Procède à un questionnement permettant de cerner les principaux besoins et attentes. Écoute le client et reformule les principaux apports du questionnement",
+          "Réalise un questionnement de nature à identifier l'ensemble des besoins et attentes du client en appliquant les principes de l'écoute active (empathie, reformulation, assertivité)"
+        ]
+      },
+      {
+        nom: "Proposition d'une offre de produits et/ou de services adaptée et cohérente",
+        niveaux: [
+          "Ne propose pas d'offre de produits et/ou services",
+          "Propose une offre de produits et/ou de services peu adaptée qui répond partiellement aux attentes du client",
+          "Propose une offre de produits et/ou de services qui répond aux principaux besoins et attentes du client",
+          "Propose une offre de produits et/ou de services répondant aux principaux besoins et attentes du client et s'assure de son adhésion"
+        ]
+      },
+      {
+        nom: "Mise en œuvre d'une argumentation convaincante et efficace",
+        niveaux: [
+          "Ne réalise pas d'argumentation",
+          "Réalise une argumentation peu cohérente",
+          "Réalise une argumentation adaptée",
+          "Réalise une argumentation adaptée dont l'efficacité est renforcée par une communication verbale et non-verbale convaincantes"
+        ]
+      }
+    ]
+  },
+  "C1.3": {
+    bloc: 1, epreuve: "E31", libelle: "Assurer l'exécution de la vente",
+    criteres: [{
+      nom: "Mise en place des modalités de règlement et de livraison conformes aux engagements pris vis-à-vis du client, aux intérêts de l'entreprise ainsi qu'à la législation et à la réglementation en vigueur",
+      niveaux: [
+        "Ne met pas en place de modalités de règlement, ni de livraison",
+        "Met approximativement en place des modalités de règlement et de livraison",
+        "Met correctement en place des modalités de règlement et de livraison",
+        "Met correctement en place des modalités de règlement et de livraison et se montre capable d'orienter le client vers le choix qui concilie au mieux ses intérêts et ceux de l'entreprise"
+      ]
+    }]
+  },
+  "C2.1": {
+    bloc: 2, epreuve: "E32", libelle: "Assurer le suivi de la commande du produit et/ou du service",
+    criteres: [{
+      nom: "Traitement du suivi de la commande",
+      niveaux: [
+        "N'assure aucun suivi de la commande",
+        "Réalise de façon partielle le suivi de la commande",
+        "Traite correctement le suivi de la commande",
+        "Traite correctement le suivi de la commande et informe le client des délais et des modalités de mise à disposition"
+      ]
+    }]
+  },
+  "C2.2": {
+    bloc: 2, epreuve: "E32", libelle: "Assurer les services associés à la vente",
+    criteres: [{
+      nom: "Mise en œuvre du ou des services associés",
+      niveaux: [
+        "Ne met pas en œuvre le ou les services associés",
+        "Met en œuvre avec des omissions ou des erreurs le ou les services associés",
+        "Met en œuvre correctement le ou les services associés",
+        "Met en œuvre correctement le ou les services associés et en assure le suivi"
+      ]
+    }]
+  },
+  "C2.3": {
+    bloc: 2, epreuve: "E32", libelle: "Traiter les retours et les réclamations du client",
+    criteres: [
+      {
+        nom: "Écoute et diagnostic du ou des problèmes rencontrés par le client",
+        niveaux: [
+          "Ne questionne pas le client",
+          "Questionne sommairement le client",
+          "Questionne de façon pertinente le client pour identifier le ou les problèmes rencontrés",
+          "Questionne de façon pertinente le client pour identifier le ou les problèmes rencontrés et reformule le ou les problèmes rencontrés par celui-ci"
+        ]
+      },
+      {
+        nom: "Proposition d'une solution adaptée",
+        niveaux: [
+          "Ne propose pas de solution",
+          "Propose une solution partiellement adaptée au(x) problème(s) du client",
+          "Propose une solution adaptée au(x) problème(s) rencontré(s) par le client",
+          "Propose une solution adaptée au(x) problème(s) rencontré(s) par le client et s'assure de son adhésion"
+        ]
+      }
+    ]
+  },
+  "C2.4": {
+    bloc: 2, epreuve: "E32", libelle: "S'assurer de la satisfaction du client",
+    criteres: [
+      {
+        nom: "Recueil et analyse de l'information sur la satisfaction client",
+        niveaux: [
+          "Ne collecte pas d'informations sur la satisfaction client",
+          "Recherche et saisit des informations incomplètes sur la satisfaction client",
+          "Transmet une information exploitable sur la satisfaction client",
+          "Transmet une information exploitable sur la satisfaction client et en fait une analyse"
+        ]
+      },
+      {
+        nom: "Préconisation d'actions d'amélioration",
+        niveaux: [
+          "Ne préconise pas d'action d'amélioration de la satisfaction client",
+          "Préconise des actions d'amélioration inadaptées aux attentes du client",
+          "Préconise des actions d'amélioration adaptées aux attentes du client",
+          "Préconise des actions d'amélioration adaptées aux attentes du client et au contexte de l'entreprise"
+        ]
+      }
+    ]
+  }
+};
+
+function competenceOrNull(code) {
+  return COMPETENCES_E31E32[String(code || "").trim()] || null;
+}
+
+const app = express();
+app.set("trust proxy", true); // Render est derrière un proxy : nécessaire pour obtenir la vraie IP du visiteur
+app.use(express.json({ limit: "2mb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
+/* ---------- Élèves : Supabase en priorité, fichier CSV en secours ---------- */
+function supabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
+}
+// Résultat : { status: "found", student } | { status: "absent" } | { status: "indisponible" }
+// "absent" = la base répond et ce code n'existe pas (ou n'est plus actif) : refus net.
+// "indisponible" = la base ne répond pas (panne, mise en pause) : seul cas où l'on
+// se rabat sur l'ancien fichier CSV, pour ne pas bloquer tous les élèves.
+async function lookupStudent(code, { activeOnly = true } = {}) {
+  if (!supabaseConfigured()) return { status: "indisponible" };
   try {
-    const s = await apiStatus(code);
-    studentCode = code;
-    document.getElementById("whoami").textContent = "Connecté(e) : " + s.nom;
-    renderQuota(s);
-    document.getElementById("screenLogin").classList.add("hidden");
-    document.getElementById("app").classList.remove("hidden");
+    const filter = activeOnly ? "&active=eq.true" : "";
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}${filter}&select=code,nom,active,option_choice`,
+      { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } }
+    );
+    if (!r.ok) {
+      console.error("Base élèves : réponse HTTP", r.status);
+      return { status: "indisponible" };
+    }
+    const rows = await r.json();
+    return rows[0] ? { status: "found", student: rows[0] } : { status: "absent" };
   } catch (e) {
-    err.textContent = e.message || "Connexion impossible.";
+    console.error("Erreur lecture élève Supabase:", e && e.message);
+    return { status: "indisponible" };
   }
-};
-document.getElementById("codeInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("loginBtn").click();
+}
+
+async function requireStudent(req, res, next) {
+  const code = String(req.body.code || req.query.code || "").trim();
+  if (!code) return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
+
+  const found = await lookupStudent(code);
+  if (found.status === "found") {
+    req.studentCode = code;
+    req.studentName = found.student.nom;
+    req.studentOption = found.student.option_choice || null; // "A" | "B" | null (pas encore choisie)
+    return next();
+  }
+  if (found.status === "absent") {
+    return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
+  }
+
+  // Base indisponible : repli sur l'ancien fichier CSV
+  const students = loadStudents();
+  if (!students.has(code)) {
+    return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
+  }
+  req.studentCode = code;
+  req.studentName = students.get(code);
+  req.studentOption = null;
+  next();
+}
+
+/* ---------- Espace enseignant : ajouter des élèves sans passer par GitHub ---------- */
+// Limite de tentatives : après 8 essais incorrects, on bloque 5 minutes.
+// Simple et suffisant pour un usage à l'échelle d'un établissement — pas
+// conçu pour résister à une attaque distribuée depuis de nombreuses adresses.
+const TEACHER_LOGIN_MAX_ATTEMPTS = 8;
+const TEACHER_LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
+const teacherLoginAttempts = new Map(); // ip -> { count, lockedUntil }
+
+function checkTeacherPassword(req, res) {
+  const ip = req.ip || req.socket.remoteAddress || "inconnu";
+  const now = Date.now();
+  const entry = teacherLoginAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+
+  if (entry.lockedUntil > now) {
+    const minutes = Math.ceil((entry.lockedUntil - now) / 60000);
+    res.status(429).json({ error: "trop_de_tentatives", message: `Trop de tentatives incorrectes. Réessayez dans ${minutes} min.` });
+    return false;
+  }
+
+  // Le mot de passe voyage désormais dans un en-tête plutôt que dans
+  // l'adresse (?password=...), pour ne pas finir dans l'historique du
+  // navigateur ni d'éventuels journaux d'accès.
+  const password = String(req.headers["x-teacher-password"] || req.body.password || "");
+  if (password !== TEACHER_PASSWORD) {
+    entry.count += 1;
+    if (entry.count >= TEACHER_LOGIN_MAX_ATTEMPTS) {
+      entry.lockedUntil = now + TEACHER_LOGIN_LOCKOUT_MS;
+      entry.count = 0;
+    }
+    teacherLoginAttempts.set(ip, entry);
+    res.status(401).json({ error: "mot_de_passe_invalide", message: "Mot de passe enseignant incorrect." });
+    return false;
+  }
+
+  teacherLoginAttempts.delete(ip); // succès : on oublie les essais précédents
+  return true;
+}
+
+async function generateUniqueCode() {
+  for (let i = 0; i < 20; i++) {
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    // On vérifie parmi TOUS les codes, y compris désactivés : un code désactivé
+    // ne doit jamais être réattribué à quelqu'un d'autre.
+    const existing = await lookupStudent(code, { activeOnly: false });
+    if (existing.status === "absent") return code;
+    if (existing.status === "indisponible") throw new Error("Base élèves indisponible.");
+  }
+  throw new Error("Impossible de générer un code unique après 20 essais.");
+}
+
+app.get("/api/teacher/students", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students?select=code,nom,classe,active,created_at&order=created_at.desc`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger la liste des élèves." });
+  }
 });
 
-/* ---------- Modèle d'examen (E33 uniquement) ---------- */
-const EXAM_TEMPLATES = [
-  { id: "e33-situation1", type: "examen", title: "Oral E33 (CCF) — Situation 1 : action de fidélisation (FDRC)",
-    summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
-];
+app.post("/api/teacher/students", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });
+  const nom = String(req.body.nom || "").trim().slice(0, 120);
+  const classe = String(req.body.classe || "").trim().slice(0, 80);
+  if (!nom) return res.status(400).json({ error: "requete_invalide", message: "Le nom est obligatoire." });
 
-function buildExamScenario(template, genderProf, genderPro) {
-  return {
-    id: template.id, type: "examen", title: template.title, aiLabel: template.aiLabel,
-    genderByMembre: { professeur: genderProf || "female", professionnel: genderPro || "male" },
-    openingSegments: [
-      { membre: "professeur", text: "Bonjour, installez-vous. Je suis votre professeure d'économie-gestion, et je siège aujourd'hui avec un professionnel du secteur du commerce pour cette situation 1 de l'épreuve E33." },
-      { membre: "professionnel", text: "Bonjour. De mon côté, je serai surtout attentif à la façon dont vos propositions tiendraient vraiment sur le terrain, dans une entreprise réelle." },
-      { membre: "professeur", text: "Vous allez nous présenter votre phase préparatoire à une action de fidélisation de la clientèle, en vous appuyant sur les sources d'information mobilisées et sur les deux actions que vous proposez. Vous avez jusqu'à dix minutes, sans interruption de notre part. Ensuite, nous échangerons avec vous pendant dix minutes. Je vous écoute, quand vous êtes prêt." }
-    ]
-  };
+  try {
+    const code = await generateUniqueCode();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=representation"
+      },
+      body: JSON.stringify({ code, nom, classe: classe || null, active: true })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const rows = await r.json();
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error("Erreur création élève:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de créer l'élève." });
+  }
+});
+
+app.get("/api/status", requireStudent, (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  const minutesRestantes = Math.max(0, MONTHLY_LIMIT_MINUTES - minutes);
+  res.json({
+    nom: req.studentName,
+    minutesUtilisees: minutes,
+    minutesLimite: MONTHLY_LIMIT_MINUTES,
+    minutesRestantes,
+    avertissement: minutesRestantes > 0 && minutesRestantes <= WARNING_THRESHOLD_MINUTES,
+    option: req.studentOption
+  });
+});
+
+// L'élève choisit son option (A ou B) une fois, au premier passage sur le
+// module E31/E32 — nécessaire pour que les mises en situation fictives
+// restent cohérentes avec son type de vente (magasin vs B2B/rendez-vous).
+app.post("/api/student/option", requireStudent, async (req, res) => {
+  const option = String(req.body.option || "").trim().toUpperCase();
+  if (option !== "A" && option !== "B") {
+    return res.status(400).json({ error: "requete_invalide", message: "Option A ou B attendue." });
+  }
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(req.studentCode)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=minimal"
+      },
+      body: JSON.stringify({ option_choice: option })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    res.json({ ok: true, option });
+  } catch (e) {
+    console.error("Erreur enregistrement option:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible d'enregistrer votre option." });
+  }
+});
+
+/* ---------- Point hebdomadaire E31/E32 : compétence de la semaine ---------- */
+app.get("/api/competences", (req, res) => {
+  // Référentiel public (contenu pédagogique, pas de donnée personnelle) : utile
+  // au menu déroulant de la page enseignant pour choisir la compétence de la semaine.
+  const list = Object.entries(COMPETENCES_E31E32).map(([code, c]) => ({ code, bloc: c.bloc, epreuve: c.epreuve, libelle: c.libelle }));
+  res.json(list);
+});
+
+app.get("/api/weekly-focus", requireStudent, async (req, res) => {
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/weekly_focus?select=competence_code,set_at&order=set_at.desc&limit=1`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: "non_defini", message: "L'enseignant n'a pas encore choisi la compétence de la semaine." });
+    const comp = competenceOrNull(row.competence_code);
+    if (!comp) return res.status(404).json({ error: "non_defini", message: "Compétence introuvable." });
+    res.json({ code: row.competence_code, libelle: comp.libelle, bloc: comp.bloc, epreuve: comp.epreuve, setAt: row.set_at });
+  } catch (e) {
+    console.error("Erreur lecture compétence de la semaine:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger la compétence de la semaine." });
+  }
+});
+
+app.get("/api/teacher/weekly-focus", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/weekly_focus?select=competence_code,set_at&order=set_at.desc&limit=1`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    const row = rows[0];
+    if (!row) return res.json({ code: null });
+    const comp = competenceOrNull(row.competence_code);
+    res.json({ code: row.competence_code, libelle: comp ? comp.libelle : null, setAt: row.set_at });
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger la compétence de la semaine." });
+  }
+});
+
+app.post("/api/teacher/weekly-focus", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  const code = String(req.body.code || "").trim();
+  const comp = competenceOrNull(code);
+  if (!comp) return res.status(400).json({ error: "requete_invalide", message: "Code de compétence inconnu." });
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/weekly_focus`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=minimal"
+      },
+      body: JSON.stringify({ competence_code: code })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    res.status(201).json({ ok: true, code, libelle: comp.libelle });
+  } catch (e) {
+    console.error("Erreur enregistrement compétence de la semaine:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible d'enregistrer la compétence de la semaine." });
+  }
+});
+
+/* ---------- Voix OpenAI (facultatif) ---------- */
+// Voix par défaut du catalogue OpenAI (changeables via variables d'environnement
+// OPENAI_VOICE_MALE / OPENAI_VOICE_FEMALE si vous voulez essayer d'autres voix :
+// alloy, echo, fable, onyx, nova, shimmer).
+function openaiVoice(gender) {
+  if (gender === "female") return process.env.OPENAI_VOICE_FEMALE || "nova";
+  return process.env.OPENAI_VOICE_MALE || "onyx";
 }
 
-function RULES(s) {
-  return `Tu joues le jury de l'épreuve E33 du Bac Pro Métiers du Commerce et de la Vente (CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de fidélisation de la clientèle et développement de la relation client (FDRC)".
+app.post("/api/speech", requireStudent, async (req, res) => {
+  if (!OPENAI_API_KEY) {
+    return res.status(503).json({ error: "voix_non_configuree" });
+  }
+  const text = String(req.body.text || "").trim();
+  if (!text) return res.status(400).json({ error: "requete_invalide" });
+  const voice = openaiVoice(req.body.gender);
 
-CE JURY EST COMPOSÉ DE DEUX PERSONNES DISTINCTES, comme le veut le référentiel officiel — tu incarnes les deux, en alternant naturellement selon qui a la question la plus pertinente à poser :
-- LE / LA PROFESSEUR(E) D'ÉCONOMIE-GESTION : se concentre sur la rigueur méthodologique du diagnostic, la structuration de la démarche, le lien avec les notions du programme (sources d'information, SIC, SWOT).
-- LE / LA PROFESSIONNEL(LE) DU SECTEUR COMMERCE/VENTE : se concentre sur le réalisme terrain — est-ce que ça tiendrait vraiment dans une vraie entreprise, la faisabilité concrète des actions proposées, l'expérience pratique du candidat au quotidien.
-Ne fais jamais parler les deux en même temps dans une réplique : chaque réplique est UNE question posée par UN SEUL des deux membres, identifié par le champ "membre" de ta réponse JSON. Alterne entre les deux au fil de l'entretien plutôt que de laisser un seul membre monopoliser la parole, et ne redonne jamais la parole immédiatement au même membre qui vient de parler sauf s'il relance sur une réponse incomplète.
+  try {
+    const r = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${OPENAI_API_KEY}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_TTS_MODEL,
+        voice,
+        input: text,
+        response_format: "mp3",
+        speed: OPENAI_TTS_SPEED
+      })
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      console.error("Erreur OpenAI TTS:", r.status, detail.slice(0, 300));
+      return res.status(502).json({ error: "voix_erreur" });
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.setHeader("content-type", "audio/mpeg");
+    res.send(buf);
+  } catch (e) {
+    console.error("Erreur OpenAI TTS:", e && e.message);
+    res.status(502).json({ error: "voix_erreur" });
+  }
+});
 
-L'ÉLÈVE VIENT DE FAIRE SA PRÉSENTATION ORALE DE 10 MINUTES SANS INTERRUPTION (elle t'a été transmise intégralement dans le premier message ci-dessous, entre crochets). Tu ne l'as pas coupée pendant qu'elle parlait — c'est seulement maintenant que commence l'entretien de 10 minutes.
+/* ---------- Historique des évaluations (Supabase, facultatif) ---------- */
+function extractScore(text) {
+  const m = String(text || "").match(/NOTE GLOBALE\s*:\s*([\d]+(?:[.,][\d]+)?)\s*\/\s*20/i);
+  return m ? Number(m[1].replace(",", ".")) : null;
+}
 
-LA PRÉSENTATION ATTENDUE DE L'ÉLÈVE SUIT NORMALEMENT CETTE PROGRESSION (d'après les trames académiques officielles) — sers-t'en pour repérer ce qui a été traité ou survolé :
-PARTIE 1 — LE DIAGNOSTIC DE L'ENTREPRISE :
-1. Présentation de l'enseigne (identité, forme juridique, effectif, surface de vente...)
-2. Assortiment (produits et services)
-3. Profil de la clientèle
-4. La politique commerciale de l'enseigne
-5. La concurrence
-6. La zone de chalandise
-7. Les outils numériques et outils actuels de fidélisation / relation client déjà en place
-8. Le SWOT — bilan du diagnostic (forces / faiblesses de la FDRC existante)
-PARTIE 2 — LES PROPOSITIONS :
-9. Les DEUX actions de FDRC proposées, chacune avec sa cible et ses objectifs.
-(Le planning détaillé, le budget précis et la répartition des tâches relèvent normalement de la "feuille de route" écrite qui suit cette situation 1, pas d'un développement oral complet — n'exige pas ces détails chiffrés comme une présentation orale mais tu peux demander si l'élève y a réfléchi.)
+async function saveEvaluation({ code, name, diploma, evaluationText, transcript }) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return; // pas configuré : on ignore silencieusement
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/evaluations`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        student_code: code,
+        student_name: name,
+        diploma: diploma || null,
+        score: extractScore(evaluationText),
+        evaluation_text: evaluationText,
+        transcript: transcript || null
+      })
+    });
+  } catch (e) {
+    console.error("Erreur enregistrement Supabase:", e && e.message);
+  }
+}
 
-CE QUE TU DOIS ÉVALUER PENDANT L'ENTRETIEN (grille officielle E33 Situation 1) :
-1. Pertinence du choix des sources d'information et des données recueillies (sources internes comme le SIC, sources externes, fiabilité, utilité pour la FDRC).
-2. Qualité du traitement des sollicitations clients : l'élève doit pouvoir expliciter sa propre contribution concrète à la fidélisation dans ses actions du quotidien.
-3. Pertinence des actions proposées : l'élève DOIT avoir proposé DEUX actions de FDRC. Si une seule action a été présentée, ou si aucune, ou si elles semblent peu cohérentes avec le contexte et la stratégie commerciale de l'entreprise, challenge-le précisément là-dessus.
-4. Cohérence du choix des outils de fidélisation avec le contexte : c'est le critère le plus exigeant — vérifie que les actions proposées découlent logiquement du diagnostic (profil clientèle, concurrence, zone de chalandise, SWOT). Si l'élève a présenté un diagnostic complet mais que ses actions ne s'appuient pas dessus, ou si le diagnostic a été survolé sans lien clair avec les actions, challenge-le précisément là-dessus.
+/* ---------- Historique des positionnements E31/E32 (Supabase) ---------- */
+function extractNiveauGlobal(text) {
+  const m = String(text || "").match(/NIVEAU GLOBAL\s*:\s*(Novice|Débrouillé|Averti|Expert)/i);
+  return m ? m[1] : null;
+}
+
+async function savePositionnement({ code, name, option, competenceCode, competenceLibelle, evaluationText, transcript }) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/positionnements`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        student_code: code,
+        student_name: name,
+        option_choice: option || null,
+        competence_code: competenceCode,
+        competence_libelle: competenceLibelle,
+        niveau_global: extractNiveauGlobal(evaluationText),
+        evaluation_text: evaluationText,
+        transcript: transcript || null
+      })
+    });
+  } catch (e) {
+    console.error("Erreur enregistrement positionnement Supabase:", e && e.message);
+  }
+}
+
+/* ---------- Prompt du professionnel — point hebdomadaire E31/E32 ---------- */
+function contexteOption(option) {
+  if (option === "B") {
+    return "L'élève est en option B (Prospection Clientèle et Valorisation de l'Offre Commerciale) : ses mises en situation relèvent typiquement d'une vente sur rendez-vous ou en B2B (banque, assurance, immobilier, automobile, agence de communication...), pas d'une vente spontanée en rayon.";
+  }
+  return "L'élève est en option A (Animation et Gestion de l'Espace Commercial) : ses mises en situation relèvent typiquement d'une vente en magasin, avec une clientèle qui entre spontanément dans l'espace de vente.";
+}
+
+function POSITIONNEMENT_RULES(competence, option) {
+  const criteresTxt = competence.criteres.map(c => `- ${c.nom}`).join("\n");
+  return `Tu es un professionnel du secteur commerce/vente qui suit un(e) apprenti(e) de Bac Pro MCV tout au long de l'année, lors d'un point rapide hebdomadaire de 7 minutes en classe — pas un examen, un point d'étape régulier.
+
+${contexteOption(option)}
+
+LA COMPÉTENCE VISÉE AUJOURD'HUI (${competence.epreuve}) : "${competence.libelle}"
+Les points précis à explorer :
+${criteresTxt}
+
+DÉROULEMENT ATTENDU :
+1. Commence TOUJOURS par chercher un vécu réel : demande à l'élève s'il lui est arrivé récemment, en entreprise (PFMP), de vivre une situation en lien avec cette compétence. Une seule question ouverte pour démarrer.
+2. S'il a un exemple réel : creuse-le avec 1 à 2 relances précises pour vérifier qu'il maîtrise vraiment les points ci-dessus, pas seulement qu'il décrit les faits.
+3. S'il n'a PAS d'exemple réel (trop tôt dans l'année, jamais rencontré cette situation chez son employeur), bascule sur une mise en situation fictive et courte : invente un contexte précis et inédit (un client, un produit, une situation), cohérent avec son option, et demande-lui de réagir comme s'il y était. Ne réutilise jamais un contexte générique ou déjà vu — invente un décor concret à chaque fois.
+4. Distingue toujours clairement, dans tes questions, si tu parles du VÉCU RÉEL de l'élève ou d'une MISE EN SITUATION fictive — ne mélange jamais les deux sans que ce soit explicite.
+5. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
 
 RÈGLES :
-- Tu es UNIQUEMENT l'examinateur. Ne donne jamais la réponse, ne sors jamais du rôle.
-- RÈGLE DE PRIORITÉ ABSOLUE, À VÉRIFIER AVANT CHAQUE RÉPLIQUE : passe en revue mentalement les 8 points du diagnostic (partie 1). Si la présentation de l'élève a été sommaire, rapide, ou n'a pas clairement traité au moins 5 de ces 8 points (l'entreprise, l'assortiment, la clientèle, la politique commerciale, la concurrence, la zone de chalandise, les outils actuels, le SWOT), tu DOIS consacrer tes 2 à 3 premières questions à combler ces trous du diagnostic — jamais interroger sur la pertinence ou la cohérence des actions proposées tant que le diagnostic reste flou, puisque tu ne peux pas juger une cohérence que tu n'as pas les moyens de vérifier. Ne passe aux questions sur les actions (partie 2) qu'une fois le contexte suffisamment établi, par la présentation initiale ou par tes propres questions.
-- Ta toute première réplique enchaîne DIRECTEMENT sur ta première question, sans formule de politesse d'ouverture ("merci", "d'accord", "très bien"...) — ces formules ont déjà été dites par ailleurs. Ne résume pas non plus la présentation, pose directement ta question, en respectant la règle de priorité ci-dessus.
-- N'ouvre jamais une réplique par "merci", "d'accord", "très bien" ou une formule de politesse similaire, sur aucun tour de l'entretien — ces formules sont prises en charge séparément. Enchaîne toujours directement sur le fond.
-- Tu parles à l'oral : phrases courtes et naturelles, 1 à 2 questions maximum par réplique.
-- Pose des questions précises qui challengent les choix de l'élève sur SA propre présentation — jamais de question générique déconnectée de ce qu'il vient de dire.
-- Une fois le diagnostic suffisamment établi, vérifie explicitement que les DEUX actions de FDRC ont bien été proposées et découlent logiquement de ce diagnostic — si ce lien n'est pas clair, demande-le directement.
-- Reste professionnel, exigeant mais bienveillant, comme un vrai examinateur.
-- REGISTRE ORAL (s'applique UNIQUEMENT au texte à l'intérieur du champ "replique") : tu parles, tu n'écris pas. Des phrases courtes, parfois inachevées ou reprises en cours de route, des hésitations légères ("bon", "donc", "alors"), des tournures orales ("vous m'avez dit que...", pas "vous avez indiqué que..."). Jamais plus d'une idée bien construite par phrase — évite les répliques trop propres, trop écrites, qui alignent plusieurs phrases parfaites d'affilée.
-- INTERDIT : ne redis jamais mot pour mot une réplique que tu as déjà dite dans cet échange (relis l'historique avant de répondre). Réagis toujours à ce que le candidat vient de dire, même si c'est bref, hors sujet ou maladroit.
-- Ne fais pas passer "etat" à "conclu" avant d'avoir réellement couvert au moins 3 des 4 points de la grille (au moins 5 à 7 vrais échanges de fond) — jamais à cause d'une seule réponse creuse.
+- Tu es UNIQUEMENT ce professionnel. Ne donne jamais la réponse, ne sors jamais du rôle.
+- Une seule réplique courte à la fois, 1 question maximum.
+- Registre oral naturel : phrases courtes, parfois inachevées, hésitations légères ("bon", "donc", "alors").
+- N'ouvre jamais par "merci", "d'accord", "très bien" — enchaîne directement sur le fond.
+- Ne redis jamais mot pour mot une réplique déjà dite dans cet échange.
+- Passe "etat" à "conclu" après 2 à 4 échanges de fond avec l'élève (le format est volontairement court, 7 minutes) — jamais après une seule réponse creuse, mais sans t'éterniser non plus.
 
-FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta réponse complète doit être UN SEUL objet JSON valide, rien avant, rien après, jamais de texte libre en dehors de ce JSON, même court. Le naturel oral demandé ci-dessus ne concerne QUE le contenu de la valeur "replique" — la structure JSON elle-même reste toujours strictement technique, jamais "à l'oral" :
-{"replique": "ta réplique à l'oral", "membre": "professeur" | "professionnel", "etat": "en_cours" | "conclu"}
-
-Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSegments.map(seg => `[${seg.membre}] "${seg.text}"`).join(" ")}`;
+FORMAT DE RÉPONSE — RÈGLE ABSOLUE : un seul objet JSON valide, rien avant, rien après :
+{"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}`;
 }
 
-/* ---------- Éléments ---------- */
-const $ = (id) => document.getElementById(id);
-const screens = { setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief") };
-function showScreen(name) {
-  for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
-  window.scrollTo(0, 0);
-}
+function POSITIONNEMENT_EVAL_PROMPT(competence, transcript) {
+  const criteresTxt = competence.criteres.map(c =>
+    `${c.nom} :\n  1 (Novice) : ${c.niveaux[0]}\n  2 (Débrouillé) : ${c.niveaux[1]}\n  3 (Averti) : ${c.niveaux[2]}\n  4 (Expert) : ${c.niveaux[3]}`
+  ).join("\n\n");
+  const commTxt = `${COMMUNICATION_CRITERE.nom} :\n  1 (Novice) : ${COMMUNICATION_CRITERE.niveaux[0]}\n  2 (Débrouillé) : ${COMMUNICATION_CRITERE.niveaux[1]}\n  3 (Averti) : ${COMMUNICATION_CRITERE.niveaux[2]}\n  4 (Expert) : ${COMMUNICATION_CRITERE.niveaux[3]}`;
 
-let scenario = null;
-let turns = [];
-let busy = false;
-let finished = false;
-let lastClientLine = "";
-let lastMembre = null;
+  return `Tu es un professionnel qui positionne un(e) apprenti(e) de Bac Pro MCV sur la compétence "${competence.libelle}" (${competence.epreuve}), à partir d'un point hebdomadaire de 7 minutes. Positionne STRICTEMENT à partir des preuves présentes dans la transcription — jamais sur une impression générale, jamais sur une capacité supposée.
 
-/* ---------- Voix : Azure en priorité, navigateur en secours automatique ---------- */
-let voicesReady = new Promise(resolve => {
-  if (!("speechSynthesis" in window)) return resolve();
-  if (speechSynthesis.getVoices().length) return resolve();
-  speechSynthesis.onvoiceschanged = () => resolve();
-  setTimeout(resolve, 2500);
-});
-const FEMALE = /denise|vivienne|eloise|brigitte|coralie|jacqueline|yvette|julie|hortense|charline|sylvie|ariane|amelie|am[ée]lie|marie|léa|lea/i;
-const MALE = /henri|remy|rémy|alain|claude|jerome|jérôme|maurice|yves|gerard|gérard|fabrice|paul|thomas|antoine|guillaume/i;
-function pickVoice(gender) {
-  const all = speechSynthesis.getVoices().filter(v => (v.lang || "").toLowerCase().startsWith("fr"));
-  const natural = all.filter(v => /natural|online|neural/i.test(v.name));
-  const pool = natural.length ? natural : all;
-  const fr = pool.filter(v => /fr-fr/i.test(v.lang));
-  const base = fr.length ? fr : pool;
-  const re = gender === "female" ? FEMALE : MALE;
-  return base.find(v => re.test(v.name)) || base[0] || null;
-}
-
-let currentAudio = null;
-let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
-
-// Jeton de lecture : chaque appel à speak() en réclame un nouveau. Si un appel
-// plus récent démarre pendant qu'un ancien attend encore sa réponse réseau
-// (typiquement : l'accusé de réception qui attend encore pendant que la
-// vraie réplique est déjà prête), l'ancien se voit périmé et n'affiche ni
-// ne joue plus rien à son retour — ça évite que les deux voix se chevauchent.
-let speechToken = 0;
-
-function speakBrowser(text, gender, token) {
-  return new Promise(resolve => {
-    if (!("speechSynthesis" in window)) return resolve();
-    if (token !== speechToken) return resolve(); // périmé : une lecture plus récente a pris le relais
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const v = pickVoice(gender || scenario.gender);
-    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "fr-FR"; }
-    u.rate = 1.02;
-    u.onend = resolve; u.onerror = resolve;
-    speechSynthesis.speak(u);
-  });
-}
-
-async function speak(text, genderOverride) {
-  stopSpeaking();
-  const myToken = speechToken; // capturé juste après stopSpeaking(), qui vient d'incrémenter le jeton
-  const gender = genderOverride || scenario.gender;
-  if (!azureUnavailable) {
-    try {
-      const r = await fetch("/api/speech", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: studentCode, text, gender })
-      });
-      if (!r.ok) throw new Error("azure_indisponible");
-      const blob = await r.blob();
-      if (myToken !== speechToken) { return; } // périmé pendant le chargement : on abandonne silencieusement
-      const url = URL.createObjectURL(blob);
-      currentAudio = new Audio(url);
-      await new Promise(resolve => {
-        currentAudio.onended = resolve;
-        currentAudio.onerror = resolve;
-        currentAudio.play().catch(resolve);
-      });
-      URL.revokeObjectURL(url);
-      return;
-    } catch (e) {
-      azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
-    }
-  }
-  if (myToken !== speechToken) return; // périmé avant même le repli navigateur
-  await speakBrowser(text, gender, myToken);
-}
-
-function stopSpeaking() {
-  speechToken++; // périme toute lecture en cours ou en attente
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
-}
-
-/* ---------- Affichage ---------- */
-function addMsg(kind, text, membre) {
-  const div = document.createElement("div");
-  div.className = "msg " + kind;
-  if (kind !== "note") {
-    const who = document.createElement("small");
-    if (kind === "client") {
-      who.textContent = membre
-        ? (membre === "professeur" ? "Le jury — professeur(e)" : "Le jury — professionnel(le)")
-        : scenario.aiLabel;
-    } else {
-      who.textContent = "Vous";
-    }
-    div.appendChild(who);
-  }
-  div.appendChild(document.createTextNode(text));
-  $("chat").appendChild(div);
-  $("chat").scrollTop = $("chat").scrollHeight;
-}
-function setStatus(text, isError) {
-  $("status").textContent = text || "";
-  $("status").classList.toggle("err", !!isError);
-}
-function setBusy(b) {
-  busy = b;
-  $("sendBtn").disabled = b || finished;
-  $("micBtn").disabled = b || finished || !recognition;
-  $("input").disabled = b || finished;
-}
-
-/* ---------- Appels au serveur (clé API cachée côté serveur) ---------- */
-function errorText(err) {
-  const code = err && err.code;
-  return ({
-    code_invalide: "Session expirée. Rechargez la page et reconnectez-vous.",
-    quota_depasse: "Temps mensuel épuisé. Réessayez le mois prochain.",
-    no_api_key: "Le serveur n'est pas encore configuré (clé API manquante). Prévenez votre professeur.",
-    anthropic_error: "Le service est momentanément indisponible. Réessayez dans un instant.",
-    reponse_invalide: "Réponse inattendue. Renvoyez votre phrase.",
-    requete_invalide: "Une information manquait. Renvoyez votre phrase.",
-  })[code] || "Une erreur est survenue. Réessayez dans un instant.";
-}
-
-async function apiTurn(messages) {
-  const r = await fetch("/api/turn", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, messages })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {replique, etat}
-}
-async function apiEvaluate(prompt, diploma, transcript) {
-  const r = await fetch("/api/evaluate", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, prompt, diploma, transcript })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data.text;
-}
-async function refreshQuota() {
-  try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
-}
-
-/* ---------- Accusé de réception immédiat (masque le temps de calcul) ----------
-   Le jury n'a pas encore répondu, mais le silence total pendant qu'on attend
-   Claude puis la voix donne l'impression que rien ne se passe. On joue une
-   très courte formule tout de suite, en parallèle du calcul réel — dès que
-   la vraie réplique est prête, elle coupe la formule et prend le relais. */
-const ACK_FILLERS = ["D'accord.", "Très bien.", "Je vois.", "Entendu.", "Merci."];
-let lastAckIndex = -1;
-function pickAckFiller() {
-  let i;
-  do { i = Math.floor(Math.random() * ACK_FILLERS.length); } while (i === lastAckIndex && ACK_FILLERS.length > 1);
-  lastAckIndex = i;
-  return ACK_FILLERS[i];
-}
-function pickAckGender() {
-  if (!scenario || !scenario.genderByMembre) return undefined;
-  const genders = Object.values(scenario.genderByMembre);
-  return genders[Math.floor(Math.random() * genders.length)];
-}
-function playAck() {
-  speak(pickAckFiller(), pickAckGender()); // volontairement non attendu : joue en parallèle du calcul
-}
-
-async function sellerSays(text) {
-  text = text.trim();
-  if (!text || busy || finished) return;
-
-  stopSpeaking();
-  $("retryBtn").classList.add("hidden");
-  addMsg("seller", text);
-  turns.push({ role: "user", content: text });
-  $("input").value = "";
-  setBusy(true);
-  setStatus("Le jury réfléchit…");
-  playAck();
-
-  try {
-    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
-    const res = await apiTurn(messages);
-    const line = String(res.replique || "").trim();
-    const etat = res.etat || "en_cours";
-    if (!line) throw { code: "reponse_invalide" };
-
-    turns.push({ role: "assistant", content: line });
-    lastClientLine = line;
-    const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
-    lastMembre = membre;
-    addMsg("client", line, membre);
-    setStatus("" + scenario.aiLabel + " parle…");
-    setBusy(false);
-    refreshQuota();
-    if (etat === "conclu") { finished = true; setBusy(false); }
-    await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
-    if (finished) {
-      addMsg("note", "L'oral est terminé.");
-      setStatus("Terminé. Cliquez sur « Terminer et voir mon évaluation ».");
-    } else {
-      setStatus("À vous : maintenez le bouton micro appuyé pour répondre, ou tapez au clavier.");
-    }
-  } catch (e) {
-    turns.pop();
-    $("input").value = text;
-    $("chat").lastChild && $("chat").lastChild.remove();
-    setBusy(false);
-    setStatus(errorText(e), true);
-    if (e.code !== "quota_depasse" && e.code !== "code_invalide") {
-      $("retryBtn").classList.remove("hidden");
-    }
-  }
-}
-$("retryBtn").onclick = () => sellerSays($("input").value);
-
-const MIN_EXCHANGES_FOR_EVAL = 5; // le jury vise 5 à 7 vrais échanges avant de conclure
-
-async function evaluate() {
-  const sellerTurns = turns.filter(t => t.role === "user").length;
-  const echanges = Math.max(0, sellerTurns - 1); // hors présentation initiale
-  if (!finished && sellerTurns >= 2 && echanges < MIN_EXCHANGES_FOR_EVAL) {
-    const ok = confirm("L'entretien est encore court (" + echanges + " réponse" + (echanges > 1 ? "s" : "") + " seulement). Le jour de l'épreuve, il dure environ 10 minutes.\n\nTerminer quand même et obtenir une évaluation ?");
-    if (!ok) return;
-  }
-  stopSpeaking();
-  if (recognition && listening) recognition.stop();
-  showScreen("debrief");
-  const box = $("debrief");
-  if (sellerTurns < 2) {
-    box.textContent = "L'échange est trop court pour être évalué. Faites au moins quelques répliques, puis recommencez.";
-    return;
-  }
-  const openingLines = scenario.openingSegments.map(seg => "LE JURY (" + seg.membre.toUpperCase() + ") : " + seg.text);
-  const transcript = openingLines
-    .concat(turns.map(t => (t.role === "user" ? "CANDIDAT : " : scenario.aiLabel.toUpperCase() + " : ") + t.content))
-    .join("\n");
-
-  const prompt = `Tu es membre de la commission d'évaluation de l'épreuve E33 (Bac Pro Métiers du Commerce et de la Vente, CCF), Situation 1 : "Phase préparatoire à la mise en œuvre d'une action de FDRC". Évalue l'élève sur cette simulation, de façon STRICTE et fondée uniquement sur des preuves dans la transcription — sans indulgence.
-
-Transcription complète (présentation puis entretien) :
+Transcription complète :
 ${transcript}
 
-GRILLE OFFICIELLE À APPLIQUER (4 critères, chacun noté sur 5, note globale sur 20) :
-1. Pertinence du choix des sources d'information et qualité du traitement des sollicitations clients.
-2. Pertinence des actions proposées — vérifie explicitement si DEUX actions de FDRC ont été formulées, chacune avec une cible et des objectifs. Une seule action, ou des actions vagues, plafonne ce critère à 2/5 maximum ; aucune action proposée plafonne à 1/5.
-3. Cohérence du choix des outils de fidélisation avec le contexte — le critère le plus exigeant : les actions découlent-elles logiquement du diagnostic présenté (profil clientèle, concurrence, zone de chalandise, SWOT) ? Un diagnostic complet mais déconnecté des actions choisies, ou un diagnostic survolé, plafonne ce critère à 2/5 maximum.
-4. Maîtrise du dossier pendant l'entretien (réactivité, justesse des réponses aux questions du jury, capacité à approfondir chaque partie du diagnostic).
+GRILLE OFFICIELLE À APPLIQUER :
 
-RÈGLES DE NOTATION :
-- N'attribue jamais le maximum sur un critère sans une preuve précise et citable dans la transcription.
-- La moyenne réaliste d'un candidat moyen tourne autour de 10 à 12/20 ; réserve 16 et plus aux prestations qui remplissent véritablement les 4 critères à un niveau expert.
-- Justifie chaque note par un élément concret que l'élève a réellement dit, jamais par une impression générale.
+${criteresTxt}
 
-Rédige l'évaluation en français simple, adressée directement à l'élève (tutoiement), en texte brut sans Markdown (pas d'astérisques ni de dièses). Structure exacte :
+${commTxt}
 
-NOTE GLOBALE : x/20
+RÈGLES DE POSITIONNEMENT :
+- N'attribue jamais "Expert" sans une preuve précise et citable dans la transcription.
+- Si la mise en situation était fictive plutôt qu'un vécu réel, dis-le explicitement — ça ne pénalise pas l'élève, mais ça doit être noté.
+- Si un critère n'a pas été assez exploré pour juger, dis-le plutôt que de deviner.
 
-CRITÈRES DE LA GRILLE E33
-Sources d'information et traitement des sollicitations clients : x/5 — une phrase citant un élément précis
-Pertinence des deux actions de FDRC proposées : x/5 — une phrase précisant si les deux actions ont bien été identifiées
-Cohérence des outils de fidélisation avec le contexte (diagnostic) : x/5 — une phrase précisant si les actions découlent du diagnostic
-Maîtrise du dossier pendant l'entretien : x/5 — une phrase
+Rédige en français simple, adressé directement à l'élève (tutoiement), texte brut sans Markdown. Structure exacte :
 
-TES POINTS FORTS
-- 2 points précis, en citant tes propres réponses
+NIVEAU GLOBAL : Novice | Débrouillé | Averti | Expert
 
-À AMÉLIORER
-- 2 ou 3 points précis, avec pour chacun une reformulation que tu aurais pu donner
+CRITÈRES ÉVALUÉS
+${competence.criteres.map(c => `${c.nom} : [niveau] — une phrase citant un élément précis`).join("\n")}
+${COMMUNICATION_CRITERE.nom} : [niveau] — une phrase
+
+CE QUI A ÉTÉ VU
+Une ou deux phrases précisant si l'échange portait sur un vécu réel en PFMP, une mise en situation fictive, ou les deux.
 
 CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;
-
-  box.textContent = "Analyse en cours… (jusqu'à une minute)";
-  try {
-    box.textContent = await apiEvaluate(prompt, scenario.title, transcript);
-    refreshQuota();
-  } catch (e) {
-    box.textContent = errorText(e);
-  }
 }
 
-/* ---------- Micro (écoute continue, robuste au bruit de classe) ----------
-   Deux modes partagent le même moteur de reconnaissance :
-   - "chat"         : une réplique à la fois (entretien), comme avant.
-   - "presentation" : accumulation longue (jusqu'à 10 minutes), sans jamais
-                      envoyer quoi que ce soit à l'IA — on écrit juste dans
-                      la zone de texte de la présentation. */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-let listening = false;
-let micMode = "chat";
-const MAX_RESTARTS = { chat: 6, presentation: 60 };
-let finalText = "";
-let presBase = "";
-let userStopped = false; // mode présentation : l'élève a cliqué pour arrêter
-let micHeld = false;     // mode entretien (talkie-walkie) : le doigt est encore sur le bouton
-let autoRestarts = 0;
-let hadError = false;
-if (SR) {
-  recognition = new SR();
-  recognition.lang = "fr-FR";
-  recognition.interimResults = true;
-  recognition.continuous = true;
-
-  recognition.onstart = () => {
-    listening = true;
-    if (micMode === "presentation") {
-      $("presMicBtn").classList.add("listening");
-      $("presStatus").textContent = "Je vous écoute…";
-    } else if (micMode === "test") {
-      $("testMicBtn").classList.add("listening");
-      $("testMicPreview").textContent = "Je vous écoute…";
-    } else {
-      $("micBtn").classList.add("listening");
-      setStatus("Je vous écoute… relâchez le micro pour envoyer.");
-    }
-  };
-  recognition.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
-      else interim += e.results[i][0].transcript;
-    }
-    if (micMode === "presentation") {
-      $("presTranscript").value = (presBase + finalText + interim).trim();
-      saveDraft($("presTranscript").value);
-    } else if (micMode === "test") {
-      $("testMicPreview").textContent = (finalText + interim).trim() || "Je vous écoute…";
-    } else {
-      $("input").value = (finalText + interim).trim();
-    }
-  };
-  recognition.onerror = (e) => {
-    hadError = true;
-    if (e.error === "no-speech") { hadError = false; return; }
-    const msg = {
-      "not-allowed": "Le micro est bloqué. Répondez au clavier.",
-      "service-not-allowed": "Le micro est bloqué. Répondez au clavier.",
-      "audio-capture": "Aucun micro détecté. Répondez au clavier.",
-      "network": "Reconnaissance vocale indisponible. Répondez au clavier."
-    }[e.error];
-    if (msg) {
-      userStopped = true;
-      micHeld = false;
-      if (micMode === "presentation") $("presStatus").textContent = msg;
-      else if (micMode === "test") $("testMicPreview").textContent = msg;
-      else setStatus(msg, true);
-    }
-  };
-  recognition.onend = () => {
-    listening = false;
-    $("micBtn").classList.remove("listening");
-    $("presMicBtn") && $("presMicBtn").classList.remove("listening");
-    $("testMicBtn") && $("testMicBtn").classList.remove("listening");
-
-    if (micMode === "test") {
-      // Simple démo gratuite : on affiche juste ce qui a été capté, rien n'est
-      // envoyé nulle part, aucun appel à l'IA, aucune consommation de quota.
-      if (!$("testMicPreview").textContent.trim() || hadError) {
-        $("testMicPreview").textContent = "(rien capté — vérifiez votre micro, ou testez à nouveau)";
-      }
-      hadError = false;
-      return;
-    }
-
-    if (micMode === "chat") {
-      // Talkie-walkie : si le doigt est encore sur le bouton, on remet
-      // l'écoute en route sans rien envoyer (coupure passagère du navigateur).
-      if (micHeld && autoRestarts < MAX_RESTARTS.chat) {
-        autoRestarts++;
-        try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
-      }
-      autoRestarts = 0;
-      const said = finalText.trim();
-      finalText = ""; // toujours vidé ici : jamais réutilisé pour un envoi suivant
-      $("input").value = "";
-      if (said && !hadError) sellerSays(said);
-      hadError = false;
-    } else if (micMode === "presentation") {
-      if (!userStopped && autoRestarts < MAX_RESTARTS.presentation) {
-        autoRestarts++;
-        try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
-      }
-      autoRestarts = 0;
-      $("presStatus").textContent = "";
-      hadError = false;
-    }
-  };
-
-  // Entretien : talkie-walkie — on maintient le bouton appuyé pour parler,
-  // on relâche pour envoyer. Plus d'écoute continue en arrière-plan, donc
-  // plus de relance surprise ni de texte réenvoyé par erreur.
-  function startChatHold(e) {
-    if (e) e.preventDefault();
-    if (busy || finished || micHeld) return;
-    stopSpeaking();
-    micMode = "chat";
-    micHeld = true;
-    finalText = ""; hadError = false; autoRestarts = 0;
-    $("input").value = "";
-    setStatus("");
-    try { recognition.start(); } catch (err) { micHeld = false; setStatus("Impossible de démarrer le micro. Répondez au clavier.", true); }
+app.post("/api/positionnement/turn", requireStudent, async (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
   }
-  function stopChatHold() {
-    if (!micHeld) return;
-    micHeld = false;
-    try { recognition.stop(); } catch (err) { /* déjà arrêté */ }
-  }
-  $("micBtn").addEventListener("pointerdown", startChatHold);
-  $("micBtn").addEventListener("pointerup", stopChatHold);
-  $("micBtn").addEventListener("pointerleave", stopChatHold);
-  $("micBtn").addEventListener("pointercancel", stopChatHold);
-
-  // Présentation : un clic démarre, un second clic arrête (une session de 10 min
-  // ne peut pas rester maintenue au doigt).
-  $("presMicBtn").onclick = () => {
-    if (listening) { userStopped = true; recognition.stop(); return; }
-    micMode = "presentation";
-    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
-    presBase = $("presTranscript").value ? $("presTranscript").value.trim() + " " : "";
-    $("presStatus").textContent = "";
-    try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
-  };
-
-  // Test micro gratuit (écran "Avant l'oral") : même geste talkie-walkie,
-  // mais rien n'est envoyé nulle part — juste une démonstration.
-  function startTestHold(e) {
-    if (e) e.preventDefault();
-    if (listening) return;
-    micMode = "test";
-    finalText = ""; userStopped = false; autoRestarts = 0; hadError = false;
-    $("testMicPreview").textContent = "";
-    try { recognition.start(); } catch (err) { $("testMicPreview").textContent = "Impossible de démarrer le micro."; }
-  }
-  function stopTestHold() {
-    if (micMode !== "test" || !listening) return;
-    try { recognition.stop(); } catch (err) { /* déjà arrêté */ }
-  }
-  $("testMicBtn").addEventListener("pointerdown", startTestHold);
-  $("testMicBtn").addEventListener("pointerup", stopTestHold);
-  $("testMicBtn").addEventListener("pointerleave", stopTestHold);
-  $("testMicBtn").addEventListener("pointercancel", stopTestHold);
-} else {
-  $("presMicBtn").onclick = () => {};
-  $("presStatus").textContent = "Micro non disponible dans ce navigateur — vous pouvez taper votre présentation au clavier.";
-  $("testMicBtn").disabled = true;
-  $("testMicPreview").textContent = "Micro non disponible dans ce navigateur.";
-}
-
-/* ---------- Démarrage ---------- */
-function renderScenarios() {
-  const listExamen = $("scenarioListExamen");
-  for (const tpl of EXAM_TEMPLATES) {
-    const b = document.createElement("button");
-    b.className = "scenario";
-    const t = document.createElement("strong"); t.textContent = tpl.title;
-    const d = document.createElement("span"); d.textContent = tpl.summary;
-    b.append(t, d);
-    b.onclick = () => { pendingTemplate = tpl; showScreen("prep"); };
-    listExamen.appendChild(b);
-  }
-}
-let pendingTemplate = null;
-$("prepStartBtn").onclick = () => {
-  start(buildExamScenario(pendingTemplate, $("prepGenderProf").value, $("prepGenderPro").value));
-};
-$("prepBackBtn").onclick = () => showScreen("setup");
-
-/* ---------- Phase 1 : présentation chronométrée (E33), sans intervention du jury ---------- */
-let presTimerId = null;
-let presRemaining = 600;
-let presentationDone = false;
-
-function updatePresTimerDisplay() {
-  const r = Math.max(presRemaining, 0);
-  const m = Math.floor(r / 60), sec = r % 60;
-  $("presTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
-  $("presTimer").classList.toggle("urgent", r <= 60);
-}
-
-/* ---------- Sauvegarde locale de la présentation (récupération après plantage) ----------
-   Le texte est enregistré dans le navigateur au fur et à mesure, pour ne pas
-   perdre 10 minutes de présentation si l'onglet se ferme ou plante par erreur.
-   Ça ne quitte jamais l'appareil de l'élève : rien n'est envoyé au serveur. */
-function draftKey() { return "vocalsales_pres_draft_" + studentCode; }
-function saveDraft(text) {
-  try { if (text) localStorage.setItem(draftKey(), text); else localStorage.removeItem(draftKey()); }
-  catch (e) { /* navigation privée ou stockage plein : tant pis, pas bloquant */ }
-}
-function loadDraft() {
-  try { return localStorage.getItem(draftKey()) || ""; }
-  catch (e) { return ""; }
-}
-function clearDraft() { saveDraft(""); }
-
-let silenceWarningShown = false;
-const SILENCE_WARNING_AFTER_SECONDS = 90;
-
-function beginPresentationPhase() {
-  presentationDone = false;
-  silenceWarningShown = false;
-  $("presStatus").textContent = "";
-  presRemaining = 600;
-  updatePresTimerDisplay();
-  showScreen("presentation");
-
-  const draft = loadDraft();
-  if (draft) {
-    const reprendre = confirm("Un brouillon d'une présentation précédente a été retrouvé. Voulez-vous le reprendre ?\n\nOK = reprendre ce brouillon (vous aurez de nouveau 10 minutes)\nAnnuler = repartir d'une présentation vierge");
-    if (reprendre) {
-      $("presTranscript").value = draft;
-      $("presStatus").textContent = "Brouillon repris — vous disposez à nouveau de 10 minutes complètes.";
-    } else {
-      clearDraft();
-      $("presTranscript").value = "";
-    }
-  } else {
-    $("presTranscript").value = "";
-  }
-
-  clearInterval(presTimerId);
-  presTimerId = setInterval(() => {
-    presRemaining--;
-    updatePresTimerDisplay();
-    const elapsed = 600 - presRemaining;
-    if (!silenceWarningShown && elapsed === SILENCE_WARNING_AFTER_SECONDS && !$("presTranscript").value.trim()) {
-      silenceWarningShown = true;
-      $("presStatus").textContent = "Attention : rien n'a encore été capté depuis 1 min 30 — vérifiez que votre micro fonctionne, ou continuez au clavier.";
-    }
-    if (presRemaining <= 0) finishPresentation();
-  }, 1000);
-}
-
-async function finishPresentation() {
-  if (presentationDone) return;
-  presentationDone = true;
-  clearInterval(presTimerId);
-  if (listening) { userStopped = true; recognition.stop(); }
-
-  const presentationText = $("presTranscript").value.trim();
-  clearDraft();
-  showScreen("chat");
-  $("scenarioTitle").textContent = scenario.title;
-  addMsg("seller", presentationText || "(aucune présentation enregistrée)");
-  setBusy(true);
-  setStatus("Le jury réfléchit…");
-  playAck();
-
-  turns = [{
-    role: "user",
-    content: "[PRÉSENTATION ORALE COMPLÈTE DE L'ÉLÈVE — 10 MINUTES, TRANSCRITE EN UN SEUL BLOC, NE PAS INTERROMPRE NI DEMANDER À L'ÉLÈVE DE RÉPÉTER CE QU'IL VIENT DE DIRE] "
-      + (presentationText || "(l'élève n'a rien dit ou le micro n'a pas fonctionné : signale-le-lui avec bienveillance et invite-le à décrire quand même sa situation à l'oral maintenant.)")
-  }];
+  const competence = competenceOrNull(req.body.competenceCode);
+  if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
+  const option = req.body.option === "B" ? "B" : "A";
+  // Seuls les tours de conversation viennent du client ; la consigne du
+  // professionnel est reconstruite ici, à partir de la compétence choisie
+  // par l'enseignant — jamais transmise (ni modifiable) depuis le navigateur.
+  const turns = Array.isArray(req.body.turns) ? req.body.turns : [];
+  const messages = [{ role: "user", content: POSITIONNEMENT_RULES(competence, option) }, ...turns];
 
   try {
-    const messages = [{ role: "user", content: RULES(scenario) }, ...turns];
-    const res = await apiTurn(messages);
-    const line = String(res.replique || "").trim();
-    if (!line) throw { code: "reponse_invalide" };
-    turns.push({ role: "assistant", content: line });
-    lastClientLine = line;
-    const membre = res.membre === "professionnel" ? "professionnel" : (res.membre === "professeur" ? "professeur" : null);
-    lastMembre = membre;
-    addMsg("client", line, membre);
-    setStatus("" + scenario.aiLabel + " parle…");
-    setBusy(false);
-    refreshQuota();
-    await speak(line, membre && scenario.genderByMembre ? scenario.genderByMembre[membre] : undefined);
-    if (!finished) setStatus("À vous : maintenez le bouton micro appuyé pour répondre, ou tapez au clavier.");
-    $("input").focus();
+    const parsed = await getValidReply(messages, 400);
+    consumeQuota(req.studentCode, COST_TURN);
+    res.json(parsed);
   } catch (e) {
-    setBusy(false);
-    setStatus(errorText(e), true);
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
   }
+});
+
+app.post("/api/positionnement/evaluate", requireStudent, async (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
+  }
+  const competence = competenceOrNull(req.body.competenceCode);
+  if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
+  const option = req.body.option === "B" ? "B" : "A";
+  const transcript = String(req.body.transcript || "").slice(0, 20000);
+  if (transcript.length < 50) return res.status(400).json({ error: "requete_invalide", message: "Échange trop court." });
+
+  try {
+    const prompt = POSITIONNEMENT_EVAL_PROMPT(competence, transcript);
+    const text = await callClaude([{ role: "user", content: prompt }], 900);
+    consumeQuota(req.studentCode, COST_POSITIONNEMENT);
+    savePositionnement({
+      code: req.studentCode, name: req.studentName, option,
+      competenceCode: req.body.competenceCode, competenceLibelle: competence.libelle,
+      evaluationText: text, transcript
+    });
+    res.json({ text });
+  } catch (e) {
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+  }
+});
+
+app.get("/api/teacher/positionnements", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base non configurée." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/positionnements?select=student_code,student_name,competence_code,competence_libelle,niveau_global,created_at&order=created_at.desc&limit=200`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger les positionnements." });
+  }
+});
+
+function extractJson(text) {
+  try { return JSON.parse(text.trim()); } catch { /* continue */ }
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) { try { return JSON.parse(match[0]); } catch { /* continue */ } }
+  return null;
 }
 
-async function start(s) {
-  scenario = s; turns = []; finished = false; lastClientLine = "";
-  $("chat").innerHTML = "";
-  $("scenarioTitle").textContent = s.title;
-  showScreen("chat");
-  setBusy(false);
-  if (!recognition) $("micBtn").title = "Micro non disponible dans ce navigateur";
-  await voicesReady;
-
-  for (const seg of s.openingSegments) {
-    addMsg("client", seg.text, seg.membre);
-    lastClientLine = seg.text;
-    lastMembre = seg.membre;
-    setStatus("Le jury — " + (seg.membre === "professeur" ? "professeur(e)" : "professionnel(le)") + " parle…");
-    await speak(seg.text, s.genderByMembre[seg.membre]);
+async function callClaude(messages, maxTokens) {
+  if (!ANTHROPIC_API_KEY) {
+    const err = new Error("no_api_key");
+    err.code = "no_api_key";
+    throw err;
   }
-  beginPresentationPhase();
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages })
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => "");
+    const err = new Error("anthropic_error");
+    err.code = "anthropic_error";
+    err.detail = text.slice(0, 300);
+    err.status = r.status;
+    throw err;
+  }
+  const data = await r.json();
+  const block = (data.content || []).find(b => b.type === "text");
+  return block ? block.text : "";
 }
 
-$("sendBtn").onclick = () => sellerSays($("input").value);
-$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sellerSays($("input").value); } });
-$("replayBtn").onclick = () => {
-  if (!lastClientLine) return;
-  const gender = lastMembre && scenario.genderByMembre ? scenario.genderByMembre[lastMembre] : undefined;
-  speak(lastClientLine, gender);
-};
-$("endBtn").onclick = evaluate;
-$("presDoneBtn").onclick = finishPresentation;
-$("presTranscript").addEventListener("input", () => saveDraft($("presTranscript").value));
-$("quitBtn").onclick = () => {
-  stopSpeaking();
-  clearInterval(presTimerId);
-  if (listening) { userStopped = true; recognition.stop(); }
-  showScreen("setup");
-};
-$("againBtn").onclick = () => showScreen("setup");
-$("printBtn").onclick = () => window.print();
+// Remarque : le préremplissage de réponse ("assistant" en fin de liste) n'est
+// pas supporté par ce modèle (Claude Sonnet 5) — on s'appuie donc uniquement
+// sur la consigne stricte du prompt et sur l'extraction tolérante ci-dessus.
+async function callClaudeJSON(messages, maxTokens) {
+  return await callClaude(messages, maxTokens);
+}
 
-renderScenarios();
-</script>
-</body>
-</html>
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Essaie jusqu'à 3 fois, en silence, avant d'abandonner : un élève en oral
+// d'examen ne doit (presque) jamais voir une erreur technique.
+async function getValidReply(messages, maxTokens, attempts = 3) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const text = await callClaudeJSON(messages, maxTokens);
+      const parsed = extractJson(text);
+      if (parsed && parsed.replique) return parsed;
+      lastErr = { code: "reponse_invalide", raw: text };
+    } catch (e) {
+      lastErr = e;
+      if (e.code === "no_api_key") throw e; // inutile de réessayer sans clé
+    }
+    if (i < attempts - 1) await sleep(400);
+  }
+  console.error("Échec après plusieurs tentatives:", lastErr);
+
+  // Filet de sécurité : si Claude a quand même écrit une réplique plausible
+  // (juste sans l'emballage JSON demandé), on l'utilise plutôt que de bloquer
+  // l'élève avec une erreur — mieux vaut une réplique sans étiquette d'état
+  // qu'un écran d'erreur en pleine conversation.
+  const raw = lastErr && typeof lastErr.raw === "string" ? lastErr.raw.trim() : "";
+  const looksUsable = raw.length > 0 && raw.length < 600 && !raw.startsWith("{") && !/^\s*<|^\s*```/.test(raw);
+  if (looksUsable) return { replique: raw, etat: "en_cours" };
+
+  const err = new Error(lastErr && lastErr.code || "reponse_invalide");
+  err.code = lastErr && lastErr.code || "reponse_invalide";
+  throw err;
+}
+
+// Un tour de dialogue (négociation ou oral) : renvoie {replique, etat}
+app.post("/api/turn", requireStudent, async (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
+  }
+  const messages = Array.isArray(req.body.messages) ? req.body.messages : null;
+  if (!messages || !messages.length) return res.status(400).json({ error: "requete_invalide" });
+
+  try {
+    const parsed = await getValidReply(messages, 500);
+    consumeQuota(req.studentCode, COST_TURN);
+    res.json(parsed);
+  } catch (e) {
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+  }
+});
+
+// Évaluation finale : renvoie {text}
+app.post("/api/evaluate", requireStudent, async (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
+  }
+  const prompt = String(req.body.prompt || "");
+  const diploma = String(req.body.diploma || "").slice(0, 200);
+  const transcript = String(req.body.transcript || "").slice(0, 20000);
+  if (!prompt) return res.status(400).json({ error: "requete_invalide" });
+
+  try {
+    const text = await callClaude([{ role: "user", content: prompt }], 1200);
+    consumeQuota(req.studentCode, COST_EVAL);
+    saveEvaluation({ code: req.studentCode, name: req.studentName, diploma, evaluationText: text, transcript });
+    res.json({ text });
+  } catch (e) {
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+  }
+});
+
+app.get("/api/health", (req, res) => res.json({ ok: true, clef: Boolean(ANTHROPIC_API_KEY) }));
+
+// Filet de sécurité : si jamais un message dépasse quand même la limite,
+// on renvoie une vraie erreur JSON exploitable par le client, plutôt que
+// de laisser Express répondre en texte brut (ce qui donnait un message
+// générique et peu clair à l'élève).
+app.use((err, req, res, next) => {
+  if (err && err.type === "entity.too.large") {
+    return res.status(413).json({ error: "message_trop_volumineux", message: "Votre échange est devenu trop long pour être envoyé d'un coup. Terminez l'oral et consultez votre évaluation, puis recommencez une nouvelle session si besoin." });
+  }
+  console.error("Erreur non gérée:", err && err.message);
+  res.status(500).json({ error: "erreur_serveur", message: "Une erreur inattendue est survenue. Réessayez." });
+});
+
+app.listen(PORT, () => console.log("VocalSales serveur démarré sur le port " + PORT));

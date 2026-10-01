@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -15,18 +14,21 @@
     --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
     --accent: #1f6f5c; --accent-ink: #ffffff; --client: #e3ebe8; --seller: #1f6f5c; --seller-ink: #ffffff;
     --ok: #1d7a3e; --ko: #b3261e; --line: #cfdad6; --rec: #c0392b;
+    --accent2: #8a6a16; --client2: #f3ecd4;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
       --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
       --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+      --accent2: #e3c878; --client2: #332c1a;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
     --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
     --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
+    --accent2: #e3c878; --client2: #332c1a;
   }
   *, *::before, *::after { box-sizing: inherit; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -44,10 +46,8 @@
   button .ico { margin-right: .45em; }
   #micBtn .ico { margin-right: 0; width: 1.6rem; height: 1.6rem; vertical-align: middle; }
   h2, .group-title, .scenario strong { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
-  /* Bandes sombres pleine largeur (sans changer la mise en page de la colonne centrale) */
   .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #0c211b; clip-path: inset(0 -100vmax); }
 
-  /* ---------- Page d'accueil : hero sombre, ancré dans l'oral lui-même ---------- */
   .landing-hero-wrap {
     background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 40px;
   }
@@ -105,14 +105,22 @@
   .group-hint { color: var(--muted); margin: -6px 0 12px; font-size: .95rem; }
 
   .scenarios { display: grid; gap: 12px; }
+  .choice-grid { display: grid; gap: 14px; margin: 0 0 14px; }
   .scenario {
     text-align: left; background: var(--card); color: var(--ink);
-    border: 2px solid var(--line); border-radius: 14px; padding: 16px 18px;
-    font: inherit; cursor: pointer; display: grid; gap: 4px;
+    border: 2px solid var(--line); border-radius: 18px; padding: 22px 20px;
+    font: inherit; cursor: pointer; display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 18px;
   }
   .scenario:hover, .scenario:focus-visible { border-color: var(--accent); outline: none; }
-  .scenario strong { font-size: 1.1rem; }
-  .scenario span { color: var(--muted); font-size: .95rem; }
+  .scenario-icon {
+    width: 56px; height: 56px; border-radius: 14px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--client); color: var(--accent);
+  }
+  .scenario--weekly .scenario-icon { background: var(--client2); color: var(--accent2); }
+  .scenario-text { display: grid; gap: 3px; }
+  .scenario strong { font-size: 1.15rem; }
+  .scenario span { color: var(--muted); font-size: .92rem; }
 
   .card {
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
@@ -188,7 +196,6 @@
     .msg { max-width: 92%; }
   }
 
-  /* Impression / export PDF : uniquement le texte de l'évaluation, en noir sur blanc */
   @media print {
     body * { visibility: hidden; }
     #debrief, #debrief * { visibility: visible; }
@@ -198,7 +205,6 @@
 </head>
 <body>
 <main>
-  <!-- Écran -1 : accueil / présentation -->
   <section id="screenLanding">
     <div class="landing-hero-wrap">
       <div class="landing-hero">
@@ -244,7 +250,6 @@
     </div>
   </section>
 
-  <!-- Écran 0 : connexion -->
   <section id="screenLogin" class="hidden">
     <div class="dark-wrap">
       <div class="dark-inner">
@@ -273,23 +278,22 @@
       </div>
     </div>
 
-    <!-- Écran 1 : choix du scénario -->
     <section id="screenSetup">
-      <h2 class="group-title">Se préparer à un oral d'examen</h2>
-      <p class="group-hint">Un jury vous interroge sur une situation de vente que vous avez préparée.</p>
-      <div class="scenarios" id="scenarioListExamen"></div>
-
-      <h2 class="group-title">Point hebdomadaire</h2>
-      <p class="group-hint">Un court échange de 7 minutes avec un professionnel, sur la compétence de la semaine choisie par votre enseignant.</p>
-      <div class="scenarios">
-        <button class="scenario" id="startPositionnementBtn" type="button">
-          <strong>Point de la semaine — E31/E32</strong>
-          <span>7 minutes, sur la compétence en cours de travail en classe.</span>
+      <p class="group-hint" style="margin-top:0;">Choisissez ce que vous voulez faire aujourd'hui.</p>
+      <div class="choice-grid" id="scenarioListExamen"></div>
+      <div class="choice-grid">
+        <button class="scenario scenario--weekly" id="startPositionnementBtn" type="button">
+          <span class="scenario-icon">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:30px;height:30px;"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+          </span>
+          <span class="scenario-text">
+            <strong>Point de la semaine</strong>
+            <span>7 minutes avec un professionnel, sur la compétence en cours en classe</span>
+          </span>
         </button>
       </div>
     </section>
 
-    <!-- Écran 1-option : choix de l'option A/B, une seule fois -->
     <section id="screenOption" class="hidden">
       <div class="card">
         <h2 style="margin:0;">Votre option</h2>
@@ -302,7 +306,6 @@
       </div>
     </section>
 
-    <!-- Écran 1-focus : présentation de la compétence de la semaine -->
     <section id="screenFocus" class="hidden">
       <div class="card">
         <h2 id="focusTitle" style="margin:0;">Compétence de la semaine</h2>
@@ -316,7 +319,6 @@
       </div>
     </section>
 
-    <!-- Écran 1-résultat : positionnement de fin de séance -->
     <section id="screenPositionnementResult" class="hidden">
       <h2>Votre positionnement</h2>
       <div class="debrief" id="positionnementDebrief">Analyse en cours…</div>
@@ -325,7 +327,6 @@
       </div>
     </section>
 
-    <!-- Écran 1bis : préparation de l'oral d'examen -->
     <section id="screenPrep" class="hidden">
       <div class="card">
         <h2 id="prepTitle" style="margin:0;">Avant l'oral</h2>
@@ -355,7 +356,6 @@
       </div>
     </section>
 
-    <!-- Écran 1ter : présentation chronométrée, sans intervention du jury -->
     <section id="screenPresentation" class="hidden">
       <div class="card">
         <h2 style="margin:0;">Votre présentation</h2>
@@ -370,7 +370,6 @@
       </div>
     </section>
 
-    <!-- Écran 2 : la vente / l'oral -->
     <section id="screenChat" class="hidden">
       <div class="bar">
         <h2 id="scenarioTitle"></h2>
@@ -391,7 +390,6 @@
       </div>
     </section>
 
-    <!-- Écran 3 : l'évaluation -->
     <section id="screenDebrief" class="hidden">
       <h2>Votre évaluation</h2>
       <div class="debrief" id="debrief">Analyse en cours…</div>
@@ -404,7 +402,6 @@
 </main>
 
 <script>
-/* ---------- Connexion élève ---------- */
 let studentCode = null;
 
 async function apiStatus(code) {
@@ -452,9 +449,9 @@ document.getElementById("codeInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("loginBtn").click();
 });
 
-/* ---------- Modèle d'examen (E33 uniquement) ---------- */
 const EXAM_TEMPLATES = [
   { id: "e33-situation1", type: "examen", title: "Oral E33 (CCF) — Situation 1 : action de fidélisation (FDRC)",
+    tileTitle: "Oral E33", tileSummary: "Entretien complet avec le jury, comme le jour de l'examen",
     summary: "10 minutes de présentation sans interruption, puis 10 minutes d'entretien avec le jury.", aiLabel: "Le jury" }
 ];
 
@@ -519,7 +516,6 @@ FORMAT DE RÉPONSE — RÈGLE ABSOLUE, PRIORITAIRE SUR TOUT LE RESTE : ta répon
 Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSegments.map(seg => `[${seg.membre}] "${seg.text}"`).join(" ")}`;
 }
 
-/* ---------- Éléments ---------- */
 const $ = (id) => document.getElementById(id);
 const screens = {
   setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief"),
@@ -531,16 +527,15 @@ function showScreen(name) {
 }
 
 let scenario = null;
-let currentMode = "examen"; // "examen" (E33) | "positionnement" (point hebdomadaire E31/E32)
-let studentOption = null; // "A" | "B" | null (pas encore choisie)
-let posCompetence = null; // { code, libelle, bloc, epreuve }
+let currentMode = "examen";
+let studentOption = null;
+let posCompetence = null;
 let turns = [];
 let busy = false;
 let finished = false;
 let lastClientLine = "";
 let lastMembre = null;
 
-/* ---------- Voix : Azure en priorité, navigateur en secours automatique ---------- */
 let voicesReady = new Promise(resolve => {
   if (!("speechSynthesis" in window)) return resolve();
   if (speechSynthesis.getVoices().length) return resolve();
@@ -560,19 +555,13 @@ function pickVoice(gender) {
 }
 
 let currentAudio = null;
-let azureUnavailable = false; // passe à true après un premier échec, pour ne pas réessayer à chaque réplique
-
-// Jeton de lecture : chaque appel à speak() en réclame un nouveau. Si un appel
-// plus récent démarre pendant qu'un ancien attend encore sa réponse réseau
-// (typiquement : l'accusé de réception qui attend encore pendant que la
-// vraie réplique est déjà prête), l'ancien se voit périmé et n'affiche ni
-// ne joue plus rien à son retour — ça évite que les deux voix se chevauchent.
+let azureUnavailable = false;
 let speechToken = 0;
 
 function speakBrowser(text, gender, token) {
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) return resolve();
-    if (token !== speechToken) return resolve(); // périmé : une lecture plus récente a pris le relais
+    if (token !== speechToken) return resolve();
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     const v = pickVoice(gender || (scenario && scenario.gender));
@@ -585,7 +574,7 @@ function speakBrowser(text, gender, token) {
 
 async function speak(text, genderOverride) {
   stopSpeaking();
-  const myToken = speechToken; // capturé juste après stopSpeaking(), qui vient d'incrémenter le jeton
+  const myToken = speechToken;
   const gender = genderOverride || (scenario && scenario.gender);
   if (!azureUnavailable) {
     try {
@@ -595,7 +584,7 @@ async function speak(text, genderOverride) {
       });
       if (!r.ok) throw new Error("azure_indisponible");
       const blob = await r.blob();
-      if (myToken !== speechToken) { return; } // périmé pendant le chargement : on abandonne silencieusement
+      if (myToken !== speechToken) { return; }
       const url = URL.createObjectURL(blob);
       currentAudio = new Audio(url);
       await new Promise(resolve => {
@@ -606,20 +595,19 @@ async function speak(text, genderOverride) {
       URL.revokeObjectURL(url);
       return;
     } catch (e) {
-      azureUnavailable = true; // on ne retentera plus Azure cette session ; repli silencieux
+      azureUnavailable = true;
     }
   }
-  if (myToken !== speechToken) return; // périmé avant même le repli navigateur
+  if (myToken !== speechToken) return;
   await speakBrowser(text, gender, myToken);
 }
 
 function stopSpeaking() {
-  speechToken++; // périme toute lecture en cours ou en attente
+  speechToken++;
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if ("speechSynthesis" in window) speechSynthesis.cancel();
 }
 
-/* ---------- Affichage ---------- */
 function addMsg(kind, text, membre) {
   const div = document.createElement("div");
   div.className = "msg " + kind;
@@ -649,7 +637,6 @@ function setBusy(b) {
   $("input").disabled = b || finished;
 }
 
-/* ---------- Appels au serveur (clé API cachée côté serveur) ---------- */
 function errorText(err) {
   const code = err && err.code;
   return ({
@@ -669,7 +656,7 @@ async function apiTurn(messages) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {replique, etat}
+  return data;
 }
 async function apiEvaluate(prompt, diploma, transcript) {
   const r = await fetch("/api/evaluate", {
@@ -684,7 +671,6 @@ async function refreshQuota() {
   try { renderQuota(await apiStatus(studentCode)); } catch (e) { /* ignore */ }
 }
 
-/* ---------- Point hebdomadaire E31/E32 ---------- */
 async function apiSetOption(option) {
   const r = await fetch("/api/student/option", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -698,7 +684,7 @@ async function apiWeeklyFocus() {
   const r = await fetch("/api/weekly-focus?code=" + encodeURIComponent(studentCode));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {code, libelle, bloc, epreuve}
+  return data;
 }
 async function apiPositionnementTurn(turnsList) {
   const r = await fetch("/api/positionnement/turn", {
@@ -707,7 +693,7 @@ async function apiPositionnementTurn(turnsList) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {replique, etat}
+  return data;
 }
 async function apiPositionnementEvaluate(transcript) {
   const r = await fetch("/api/positionnement/evaluate", {
@@ -719,11 +705,6 @@ async function apiPositionnementEvaluate(transcript) {
   return data.text;
 }
 
-/* ---------- Accusé de réception immédiat (masque le temps de calcul) ----------
-   Le jury n'a pas encore répondu, mais le silence total pendant qu'on attend
-   Claude puis la voix donne l'impression que rien ne se passe. On joue une
-   très courte formule tout de suite, en parallèle du calcul réel — dès que
-   la vraie réplique est prête, elle coupe la formule et prend le relais. */
 const ACK_FILLERS = ["D'accord.", "Très bien.", "Je vois.", "Entendu.", "Merci."];
 let lastAckIndex = -1;
 function pickAckFiller() {
@@ -738,7 +719,7 @@ function pickAckGender() {
   return genders[Math.floor(Math.random() * genders.length)];
 }
 function playAck() {
-  speak(pickAckFiller(), pickAckGender()); // volontairement non attendu : joue en parallèle du calcul
+  speak(pickAckFiller(), pickAckGender());
 }
 
 async function sellerSays(text) {
@@ -793,9 +774,8 @@ $("retryBtn").onclick = () => {
   else sellerSays($("input").value);
 };
 
-/* ---------- Point hebdomadaire E31/E32 : écrans et logique ---------- */
 let posTimerId = null;
-let posRemaining = 420; // 7 minutes
+let posRemaining = 420;
 
 function updatePosTimerDisplay() {
   const r = Math.max(posRemaining, 0);
@@ -958,11 +938,11 @@ $("positionnementAgainBtn").onclick = () => {
   showScreen("setup");
 };
 
-const MIN_EXCHANGES_FOR_EVAL = 5; // le jury vise 5 à 7 vrais échanges avant de conclure
+const MIN_EXCHANGES_FOR_EVAL = 5;
 
 async function evaluate() {
   const sellerTurns = turns.filter(t => t.role === "user").length;
-  const echanges = Math.max(0, sellerTurns - 1); // hors présentation initiale
+  const echanges = Math.max(0, sellerTurns - 1);
   if (!finished && sellerTurns >= 2 && echanges < MIN_EXCHANGES_FOR_EVAL) {
     const ok = confirm("L'entretien est encore court (" + echanges + " réponse" + (echanges > 1 ? "s" : "") + " seulement). Le jour de l'épreuve, il dure environ 10 minutes.\n\nTerminer quand même et obtenir une évaluation ?");
     if (!ok) return;
@@ -1024,12 +1004,6 @@ Une seule phrase.`;
   }
 }
 
-/* ---------- Micro (écoute continue, robuste au bruit de classe) ----------
-   Deux modes partagent le même moteur de reconnaissance :
-   - "chat"         : une réplique à la fois (entretien), comme avant.
-   - "presentation" : accumulation longue (jusqu'à 10 minutes), sans jamais
-                      envoyer quoi que ce soit à l'IA — on écrit juste dans
-                      la zone de texte de la présentation. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
@@ -1037,8 +1011,8 @@ let micMode = "chat";
 const MAX_RESTARTS = { chat: 6, presentation: 60 };
 let finalText = "";
 let presBase = "";
-let userStopped = false; // mode présentation : l'élève a cliqué pour arrêter
-let micHeld = false;     // mode entretien (talkie-walkie) : le doigt est encore sur le bouton
+let userStopped = false;
+let micHeld = false;
 let autoRestarts = 0;
 let hadError = false;
 if (SR) {
@@ -1099,8 +1073,6 @@ if (SR) {
     $("testMicBtn") && $("testMicBtn").classList.remove("listening");
 
     if (micMode === "test") {
-      // Simple démo gratuite : on affiche juste ce qui a été capté, rien n'est
-      // envoyé nulle part, aucun appel à l'IA, aucune consommation de quota.
       if (!$("testMicPreview").textContent.trim() || hadError) {
         $("testMicPreview").textContent = "(rien capté — vérifiez votre micro, ou testez à nouveau)";
       }
@@ -1109,15 +1081,13 @@ if (SR) {
     }
 
     if (micMode === "chat") {
-      // Talkie-walkie : si le doigt est encore sur le bouton, on remet
-      // l'écoute en route sans rien envoyer (coupure passagère du navigateur).
       if (micHeld && autoRestarts < MAX_RESTARTS.chat) {
         autoRestarts++;
         try { recognition.start(); return; } catch (err) { /* tombe dans l'arrêt normal */ }
       }
       autoRestarts = 0;
       const said = finalText.trim();
-      finalText = ""; // toujours vidé ici : jamais réutilisé pour un envoi suivant
+      finalText = "";
       $("input").value = "";
       if (said && !hadError) { if (currentMode === "positionnement") positionnementSellerSays(said); else sellerSays(said); }
       hadError = false;
@@ -1132,9 +1102,6 @@ if (SR) {
     }
   };
 
-  // Entretien : talkie-walkie — on maintient le bouton appuyé pour parler,
-  // on relâche pour envoyer. Plus d'écoute continue en arrière-plan, donc
-  // plus de relance surprise ni de texte réenvoyé par erreur.
   function startChatHold(e) {
     if (e) e.preventDefault();
     if (busy || finished || micHeld) return;
@@ -1156,8 +1123,6 @@ if (SR) {
   $("micBtn").addEventListener("pointerleave", stopChatHold);
   $("micBtn").addEventListener("pointercancel", stopChatHold);
 
-  // Présentation : un clic démarre, un second clic arrête (une session de 10 min
-  // ne peut pas rester maintenue au doigt).
   $("presMicBtn").onclick = () => {
     if (listening) { userStopped = true; recognition.stop(); return; }
     micMode = "presentation";
@@ -1167,8 +1132,6 @@ if (SR) {
     try { recognition.start(); } catch (err) { $("presStatus").textContent = "Impossible de démarrer le micro. Vous pouvez taper votre présentation au clavier."; }
   };
 
-  // Test micro gratuit (écran "Avant l'oral") : même geste talkie-walkie,
-  // mais rien n'est envoyé nulle part — juste une démonstration.
   function startTestHold(e) {
     if (e) e.preventDefault();
     if (listening) return;
@@ -1192,15 +1155,20 @@ if (SR) {
   $("testMicPreview").textContent = "Micro non disponible dans ce navigateur.";
 }
 
-/* ---------- Démarrage ---------- */
 function renderScenarios() {
   const listExamen = $("scenarioListExamen");
   for (const tpl of EXAM_TEMPLATES) {
     const b = document.createElement("button");
     b.className = "scenario";
-    const t = document.createElement("strong"); t.textContent = tpl.title;
-    const d = document.createElement("span"); d.textContent = tpl.summary;
-    b.append(t, d);
+    const icon = document.createElement("span");
+    icon.className = "scenario-icon";
+    icon.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:30px;height:30px;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+    const text = document.createElement("span");
+    text.className = "scenario-text";
+    const t = document.createElement("strong"); t.textContent = tpl.tileTitle || tpl.title;
+    const d = document.createElement("span"); d.textContent = tpl.tileSummary || tpl.summary;
+    text.append(t, d);
+    b.append(icon, text);
     b.onclick = () => { pendingTemplate = tpl; showScreen("prep"); };
     listExamen.appendChild(b);
   }
@@ -1211,7 +1179,6 @@ $("prepStartBtn").onclick = () => {
 };
 $("prepBackBtn").onclick = () => showScreen("setup");
 
-/* ---------- Phase 1 : présentation chronométrée (E33), sans intervention du jury ---------- */
 let presTimerId = null;
 let presRemaining = 600;
 let presentationDone = false;
@@ -1223,10 +1190,6 @@ function updatePresTimerDisplay() {
   $("presTimer").classList.toggle("urgent", r <= 60);
 }
 
-/* ---------- Sauvegarde locale de la présentation (récupération après plantage) ----------
-   Le texte est enregistré dans le navigateur au fur et à mesure, pour ne pas
-   perdre 10 minutes de présentation si l'onglet se ferme ou plante par erreur.
-   Ça ne quitte jamais l'appareil de l'élève : rien n'est envoyé au serveur. */
 function draftKey() { return "vocalsales_pres_draft_" + studentCode; }
 function saveDraft(text) {
   try { if (text) localStorage.setItem(draftKey(), text); else localStorage.removeItem(draftKey()); }

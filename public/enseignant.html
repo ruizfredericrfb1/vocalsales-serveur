@@ -54,6 +54,22 @@
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
   th { color: var(--muted); font-size: 0.85rem; }
   .inactive { color: var(--muted); font-style: italic; }
+
+  .dash-grid { display: grid; gap: 10px; }
+  .dash-item {
+    display: grid; grid-template-columns: 6px 1fr auto; align-items: center; gap: 14px;
+    padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line);
+  }
+  .dash-item::before { content: ""; align-self: stretch; border-radius: 4px; }
+  .dash-item.alerte::before { background: var(--ko); }
+  .dash-item.suivre::before { background: var(--accent2, #8a6a16); }
+  .dash-item.ok::before { background: var(--accent); }
+  .dash-name { font-weight: 700; }
+  .dash-meta { display: block; color: var(--muted); font-size: .85rem; margin-top: 1px; }
+  .dash-badge { font-size: .78rem; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
+  .dash-item.alerte .dash-badge { background: color-mix(in srgb, var(--ko) 18%, transparent); color: var(--ko); }
+  .dash-item.suivre .dash-badge { background: color-mix(in srgb, var(--accent2, #8a6a16) 20%, transparent); color: var(--accent2, #8a6a16); }
+  .dash-item.ok .dash-badge { background: var(--client, #e3ebe8); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -73,6 +89,13 @@
   </section>
 
   <div id="app" class="hidden">
+    <div class="card">
+      <h2 style="margin:0;">Tableau de bord</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Les élèves à surveiller apparaissent en premier.</p>
+      <p id="dashStatus" class="status">Chargement…</p>
+      <div id="dashGrid" class="dash-grid hidden"></div>
+    </div>
+
     <div class="card">
       <h2 style="margin:0;">Ajouter un élève</h2>
       <label for="nomInput">Nom de l'élève</label>
@@ -118,8 +141,6 @@ const $ = (id) => document.getElementById(id);
 let password = "";
 
 async function api(path, opts = {}) {
-  // Le mot de passe voyage dans un en-tête (jamais dans l'adresse), pour ne
-  // pas finir dans l'historique du navigateur ni d'éventuels journaux.
   const headers = Object.assign({ "x-teacher-password": password }, opts.headers || {});
   const r = await fetch(path, Object.assign({}, opts, { headers }));
   const data = await r.json().catch(() => ({}));
@@ -149,7 +170,7 @@ async function loadStudents() {
 let competences = [];
 async function loadCompetencesSelect() {
   try {
-    const r = await fetch("/api/competences"); // référentiel public, pas besoin de mot de passe
+    const r = await fetch("/api/competences");
     competences = await r.json();
     $("focusSelect").innerHTML = competences.map(c =>
       `<option value="${c.code}">${c.epreuve} — ${c.code} — ${c.libelle}</option>`
@@ -213,6 +234,37 @@ async function loadPositionnements() {
   }
 }
 
+function dashBadge(statut, row) {
+  if (statut === "alerte") return "Alerte";
+  if (statut === "suivre") return (row.nbEval === 0 && row.nbPositionnement === 0) ? "Jamais testé" : "À suivre";
+  return "OK";
+}
+
+async function loadDashboard() {
+  $("dashStatus").textContent = "Chargement…";
+  $("dashStatus").classList.remove("err");
+  $("dashGrid").classList.add("hidden");
+  try {
+    const rows = await api("/api/teacher/dashboard");
+    $("dashGrid").innerHTML = rows.map(r => {
+      const bits = [];
+      if (r.nbEval) bits.push(r.nbEval + " oral" + (r.nbEval > 1 ? "aux" : "") + " E33, moyenne " + r.moyenneEval + "/20");
+      if (r.nbPositionnement) bits.push("dernier point E31/E32 : " + r.dernierNiveau);
+      if (!bits.length) bits.push("Aucun passage pour l'instant");
+      return `<div class="dash-item ${r.statut}">
+        <span></span>
+        <span><span class="dash-name">${r.nom}</span><span class="dash-meta">${r.classe || ""}${r.classe ? " — " : ""}${bits.join(" · ")}</span></span>
+        <span class="dash-badge">${dashBadge(r.statut, r)}</span>
+      </div>`;
+    }).join("");
+    $("dashStatus").textContent = rows.length ? "" : "Aucun élève pour l'instant.";
+    $("dashGrid").classList.toggle("hidden", rows.length === 0);
+  } catch (e) {
+    $("dashStatus").textContent = e.message || "Impossible de charger le tableau de bord.";
+    $("dashStatus").classList.add("err");
+  }
+}
+
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;
   $("loginError").textContent = "";
@@ -220,6 +272,7 @@ $("loginBtn").onclick = async () => {
     await api("/api/teacher/students");
     $("screenLogin").classList.add("hidden");
     $("app").classList.remove("hidden");
+    loadDashboard();
     loadStudents();
     loadCompetencesSelect().then(loadCurrentFocus);
     loadPositionnements();

@@ -10,12 +10,12 @@
   :root {
     box-sizing: border-box;
     --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
-    --accent: #1f6f5c; --accent-ink: #ffffff; --line: #cfdad6; --ko: #b3261e;
+    --accent: #5b3fd1; --accent-ink: #ffffff; --line: #d8d3ee; --ko: #b3261e;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
-      --accent: #4fb99c; --accent-ink: #0b1714; --line: #2a3b36; --ko: #ff8a80;
+      --accent: #a78bfa; --accent-ink: #1a1540; --line: #3c3270; --ko: #ff8a80;
     }
   }
   * { box-sizing: inherit; }
@@ -25,7 +25,7 @@
     font-size: 17px; line-height: 1.5;
   }
   main { max-width: 640px; margin: 0 auto; padding: 28px 20px 48px; }
-  .band { background: #0c211b; color: #e9efec; margin: -28px -20px 24px; padding: 26px 20px 22px; box-shadow: 0 0 0 100vmax #0c211b; clip-path: inset(0 -100vmax); }
+  .band { background: #1a1540; color: #e9efec; margin: -28px -20px 24px; padding: 26px 20px 22px; box-shadow: 0 0 0 100vmax #1a1540; clip-path: inset(0 -100vmax); }
   .band h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 1.8rem; color: #ffffff; margin: 0 0 4px; }
   .band .tagline { color: #a9bdb3; margin: 0; }
   h2 { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
@@ -62,14 +62,14 @@
   }
   .dash-item::before { content: ""; align-self: stretch; border-radius: 4px; }
   .dash-item.alerte::before { background: var(--ko); }
-  .dash-item.suivre::before { background: var(--accent2, #8a6a16); }
+  .dash-item.suivre::before { background: var(--accent2, #9a6b00); }
   .dash-item.ok::before { background: var(--accent); }
   .dash-name { font-weight: 700; }
   .dash-meta { display: block; color: var(--muted); font-size: .85rem; margin-top: 1px; }
   .dash-badge { font-size: .78rem; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
   .dash-item.alerte .dash-badge { background: color-mix(in srgb, var(--ko) 18%, transparent); color: var(--ko); }
-  .dash-item.suivre .dash-badge { background: color-mix(in srgb, var(--accent2, #8a6a16) 20%, transparent); color: var(--accent2, #8a6a16); }
-  .dash-item.ok .dash-badge { background: var(--client, #e3ebe8); color: var(--accent); }
+  .dash-item.suivre .dash-badge { background: color-mix(in srgb, var(--accent2, #9a6b00) 20%, transparent); color: var(--accent2, #9a6b00); }
+  .dash-item.ok .dash-badge { background: var(--client, #ece7fb); color: var(--accent); }
 </style>
 </head>
 <body>

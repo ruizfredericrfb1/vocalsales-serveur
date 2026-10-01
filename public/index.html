@@ -12,23 +12,23 @@
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
-    --accent: #1f6f5c; --accent-ink: #ffffff; --client: #e3ebe8; --seller: #1f6f5c; --seller-ink: #ffffff;
-    --ok: #1d7a3e; --ko: #b3261e; --line: #cfdad6; --rec: #c0392b;
-    --accent2: #8a6a16; --client2: #f3ecd4;
+    --accent: #5b3fd1; --accent-ink: #ffffff; --client: #ece7fb; --seller: #5b3fd1; --seller-ink: #ffffff;
+    --ok: #1d7a3e; --ko: #b3261e; --line: #d8d3ee; --rec: #c0392b;
+    --accent2: #9a6b00; --client2: #fdf0d9;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
-      --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
-      --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
-      --accent2: #e3c878; --client2: #332c1a;
+      --accent: #a78bfa; --accent-ink: #1a1540; --client: #2f2657; --seller: #7c5cf0; --seller-ink: #ffffff;
+      --ok: #6fd58f; --ko: #ff8a80; --line: #3c3270; --rec: #ff6b5b;
+      --accent2: #ffcf6b; --client2: #3a2e12;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
-    --accent: #4fb99c; --accent-ink: #0b1714; --client: #22342f; --seller: #2f7f6a; --seller-ink: #ffffff;
-    --ok: #6fd58f; --ko: #ff8a80; --line: #2a3b36; --rec: #ff6b5b;
-    --accent2: #e3c878; --client2: #332c1a;
+    --accent: #a78bfa; --accent-ink: #1a1540; --client: #2f2657; --seller: #7c5cf0; --seller-ink: #ffffff;
+    --ok: #6fd58f; --ko: #ff8a80; --line: #3c3270; --rec: #ff6b5b;
+    --accent2: #ffcf6b; --client2: #3a2e12;
   }
   *, *::before, *::after { box-sizing: inherit; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -41,19 +41,19 @@
   h1 { font-size: 1.8rem; margin: 0; }
   .tagline { color: var(--muted); margin: 4px 0 24px; }
   .hidden { display: none !important; }
-  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: #0c211b; }
+  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: #1a1540; }
   .ico { width: 1.15em; height: 1.15em; vertical-align: -0.2em; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   button .ico { margin-right: .45em; }
   #micBtn .ico { margin-right: 0; width: 1.6rem; height: 1.6rem; vertical-align: middle; }
   h2, .group-title, .scenario strong { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
-  .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #0c211b; clip-path: inset(0 -100vmax); }
+  .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #1a1540; clip-path: inset(0 -100vmax); }
 
   .landing-hero-wrap {
-    background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 40px;
+    background: #1a1540; color: #ece7fb; margin: -28px -20px 0; padding: 44px 20px 40px;
   }
   .landing-hero { max-width: 640px; margin: 0 auto; }
   .landing-badge {
-    display: inline-block; border: 1px solid rgba(233,239,236,.3); color: #cfe3da;
+    display: inline-block; border: 1px solid rgba(255,255,255,.3); color: #cbb8f5;
     font-size: .82rem; font-weight: 400; padding: 5px 14px; border-radius: 999px;
     margin-bottom: 22px;
   }
@@ -61,44 +61,44 @@
     font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.5rem;
     line-height: 1.15; margin: 0 0 14px; color: #ffffff; letter-spacing: -.01em;
   }
-  .landing-hero .tagline { color: #a9bdb3; font-size: 1.08rem; max-width: 46ch; margin: 0 0 32px; }
+  .landing-hero .tagline { color: #b9aee0; font-size: 1.08rem; max-width: 46ch; margin: 0 0 32px; }
 
   .landing-transcript {
-    background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px;
+    background: #251c57; border: 1px solid rgba(255,255,255,.14); border-radius: 10px;
     padding: 18px 20px; margin-bottom: 30px; display: grid; gap: 14px;
   }
   .landing-line { display: grid; gap: 3px; }
-  .landing-line .who { font-size: .78rem; color: #7fae9a; }
-  .landing-line .said { font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eef4f0; }
-  .landing-line.candidat .who { color: #d7c98a; }
-  .landing-line.candidat .said { color: #f4efdd; }
+  .landing-line .who { font-size: .78rem; color: #a695e0; }
+  .landing-line .said { font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eee7fb; }
+  .landing-line.candidat .who { color: #ffb020; }
+  .landing-line.candidat .said { color: #ffe6b3; }
 
   .landing-hero .actions { margin: 0; }
-  #landingStartBtn { background: #d7c98a; color: #12291f; }
-  #landingStartBtn:hover { background: #e3d7a3; }
+  #landingStartBtn { background: #ffb020; color: #251c57; }
+  #landingStartBtn:hover { background: #ffc658; }
 
-  .landing-lower { max-width: 640px; margin: 44px auto 0; padding-top: 8px; border-top: 1px solid rgba(233,239,236,.12); }
+  .landing-lower { max-width: 640px; margin: 44px auto 0; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.12); }
   .landing-feature { display: grid; grid-template-columns: 3px 1fr; gap: 16px; padding: 16px 0; }
-  .landing-feature::before { content: ""; background: #3f6c5a; border-radius: 2px; }
+  .landing-feature::before { content: ""; background: #8a6ae0; border-radius: 2px; }
   .landing-feature strong { display: block; font-size: 1.02rem; color: #ffffff; margin-bottom: 3px; }
-  .landing-feature span { display: block; color: #a9bdb3; font-size: .92rem; }
-  .landing-feature + .landing-feature { border-top: 1px solid rgba(233,239,236,.1); }
-  .landing-privacy { color: #8fb8a6; font-size: .85rem; margin: 10px 0 0; }
+  .landing-feature span { display: block; color: #b9aee0; font-size: .92rem; }
+  .landing-feature + .landing-feature { border-top: 1px solid rgba(255,255,255,.1); }
+  .landing-privacy { color: #b9aee0; font-size: .85rem; margin: 10px 0 0; }
 
-  .dark-wrap { background: #0c211b; color: #e9efec; margin: -28px -20px 0; padding: 44px 20px 48px; }
+  .dark-wrap { background: #1a1540; color: #ece7fb; margin: -28px -20px 0; padding: 44px 20px 48px; }
   .dark-inner { max-width: 640px; margin: 0 auto; }
   .dark-wrap h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.2rem; line-height: 1.15; color: #ffffff; margin: 0 0 10px; }
-  .dark-wrap .tagline { color: #a9bdb3; margin: 0 0 26px; }
-  .dark-card { background: #12291f; border: 1px solid rgba(233,239,236,.14); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; }
-  .dark-card label { color: #e9efec; }
-  .dark-card input[type="text"] { background: #0c211b; color: #ffffff; border-color: rgba(233,239,236,.28); }
-  .dark-card input[type="text"]:focus-visible { border-color: #d7c98a; }
-  .dark-card .status { color: #a9bdb3; margin: 0; min-height: 0; }
+  .dark-wrap .tagline { color: #b9aee0; margin: 0 0 26px; }
+  .dark-card { background: #251c57; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; }
+  .dark-card label { color: #ece7fb; }
+  .dark-card input[type="text"] { background: #1a1540; color: #ffffff; border-color: rgba(255,255,255,.28); }
+  .dark-card input[type="text"]:focus-visible { border-color: #ffb020; }
+  .dark-card .status { color: #b9aee0; margin: 0; min-height: 0; }
   .dark-card .status.err { color: #ffb4a8; }
-  .dark-card #loginBtn { background: #d7c98a; color: #12291f; }
-  .dark-card button.secondary { color: #e9efec; border-color: rgba(233,239,236,.3); }
-  .dark-card button:focus-visible { outline-color: #d7c98a; }
-  .privacy-note { color: #8fb8a6; font-size: .84rem; line-height: 1.5; margin: 18px 0 0; }
+  .dark-card #loginBtn { background: #ffb020; color: #251c57; }
+  .dark-card button.secondary { color: #ece7fb; border-color: rgba(255,255,255,.3); }
+  .dark-card button:focus-visible { outline-color: #ffb020; }
+  .privacy-note { color: #b9aee0; font-size: .84rem; line-height: 1.5; margin: 18px 0 0; }
 
   .group-title { font-size: 1.05rem; margin: 22px 0 10px; }
   .group-title:first-of-type { margin-top: 0; }
@@ -133,11 +133,11 @@
   }
   input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
 
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: #0c211b; color: #e9efec; font-size: .92rem; margin: -28px -20px 22px; padding: 14px 20px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: #1a1540; color: #ece7fb; font-size: .92rem; margin: -28px -20px 22px; padding: 14px 20px; }
   .topbar .brand { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 1.3rem; color: #ffffff; }
   .topbar-meta { display: grid; justify-items: end; gap: 2px; text-align: right; }
-  .topbar .who { color: #a9bdb3; }
-  .quota { font-weight: 700; color: #d7c98a; }
+  .topbar .who { color: #b9aee0; }
+  .quota { font-weight: 700; color: #ffb020; }
   .quota.low { color: #ffb4a8; }
 
   .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -208,9 +208,9 @@
   <section id="screenLanding">
     <div class="landing-hero-wrap">
       <div class="landing-hero">
-        <div class="landing-badge">Bac Pro MCV — Épreuve E33, Situation 1</div>
-        <h1>L'entretien commence maintenant.</h1>
-        <p class="tagline">Un jury virtuel vous interroge sur votre action de fidélisation, dans les conditions réelles de l'oral.</p>
+        <div class="landing-badge">Bac Pro MCV</div>
+        <h1>Prêt pour l'oral, suivi toute l'année.</h1>
+        <p class="tagline">Un jury virtuel vous entraîne à l'oral E33, et vous suit chaque semaine sur E31/E32.</p>
 
         <div class="landing-transcript">
           <div class="landing-line">
@@ -234,16 +234,16 @@
 
       <div class="landing-lower">
         <div class="landing-feature"><div>
-          <strong>Un jury à deux voix</strong>
-          <span>Un(e) professeur(e) d'économie-gestion et un(e) professionnel(le) du secteur, comme le jour de l'examen.</span>
+          <strong>L'oral E33, comme le jour de l'examen</strong>
+          <span>Un jury à deux voix, aligné sur la grille officielle, avec une évaluation détaillée après chaque entraînement.</span>
         </div></div>
         <div class="landing-feature"><div>
-          <strong>Aligné sur la grille officielle</strong>
-          <span>Situation 1 de l'E33 : diagnostic, actions de fidélisation, cohérence avec le contexte.</span>
+          <strong>Un suivi chaque semaine, toute l'année</strong>
+          <span>7 minutes avec un professionnel, sur les compétences E31/E32 travaillées en classe.</span>
         </div></div>
         <div class="landing-feature"><div>
-          <strong>Une évaluation détaillée</strong>
-          <span>Note sur 20, points forts, axes de progrès — après chaque entraînement.</span>
+          <strong>Une progression visible pour votre enseignant</strong>
+          <span>Chaque passage alimente un vrai suivi de compétences, pas juste une note isolée.</span>
         </div></div>
         <p class="landing-privacy">Données enregistrées sur un serveur européen. Aucune donnée vendue. Détails sur l'écran de connexion.</p>
       </div>
@@ -287,7 +287,7 @@
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:30px;height:30px;"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
           </span>
           <span class="scenario-text">
-                        <strong>Point de la semaine — E31/E32</strong>
+            <strong>Point de la semaine — E31/E32</strong>
             <span>7 minutes avec un professionnel, sur la compétence en cours en classe</span>
           </span>
         </button>

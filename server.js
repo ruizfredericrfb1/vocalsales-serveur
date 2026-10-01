@@ -50,9 +50,6 @@ function loadUsage() {
   try { return JSON.parse(fs.readFileSync(USAGE_FILE, "utf8")); } catch { return {}; }
 }
 function saveUsage(u) {
-  // Écriture atomique : on écrit dans un fichier temporaire puis on le
-  // renomme, pour ne jamais laisser un fichier à moitié écrit en cas de
-  // plantage pile pendant la sauvegarde.
   const tmp = USAGE_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(u, null, 2));
   fs.renameSync(tmp, USAGE_FILE);
@@ -235,10 +232,6 @@ app.use(express.static(path.join(__dirname, "public")));
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 }
-// Résultat : { status: "found", student } | { status: "absent" } | { status: "indisponible" }
-// "absent" = la base répond et ce code n'existe pas (ou n'est plus actif) : refus net.
-// "indisponible" = la base ne répond pas (panne, mise en pause) : seul cas où l'on
-// se rabat sur l'ancien fichier CSV, pour ne pas bloquer tous les élèves.
 async function lookupStudent(code, { activeOnly = true } = {}) {
   if (!supabaseConfigured()) return { status: "indisponible" };
   try {
@@ -267,14 +260,13 @@ async function requireStudent(req, res, next) {
   if (found.status === "found") {
     req.studentCode = code;
     req.studentName = found.student.nom;
-    req.studentOption = found.student.option_choice || null; // "A" | "B" | null (pas encore choisie)
+    req.studentOption = found.student.option_choice || null;
     return next();
   }
   if (found.status === "absent") {
     return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
   }
 
-  // Base indisponible : repli sur l'ancien fichier CSV
   const students = loadStudents();
   if (!students.has(code)) {
     return res.status(401).json({ error: "code_invalide", message: "Code de connexion inconnu." });
@@ -286,12 +278,9 @@ async function requireStudent(req, res, next) {
 }
 
 /* ---------- Espace enseignant : ajouter des élèves sans passer par GitHub ---------- */
-// Limite de tentatives : après 8 essais incorrects, on bloque 5 minutes.
-// Simple et suffisant pour un usage à l'échelle d'un établissement — pas
-// conçu pour résister à une attaque distribuée depuis de nombreuses adresses.
 const TEACHER_LOGIN_MAX_ATTEMPTS = 8;
 const TEACHER_LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
-const teacherLoginAttempts = new Map(); // ip -> { count, lockedUntil }
+const teacherLoginAttempts = new Map();
 
 function checkTeacherPassword(req, res) {
   const ip = req.ip || req.socket.remoteAddress || "inconnu";
@@ -304,9 +293,6 @@ function checkTeacherPassword(req, res) {
     return false;
   }
 
-  // Le mot de passe voyage désormais dans un en-tête plutôt que dans
-  // l'adresse (?password=...), pour ne pas finir dans l'historique du
-  // navigateur ni d'éventuels journaux d'accès.
   const password = String(req.headers["x-teacher-password"] || req.body.password || "");
   if (password !== TEACHER_PASSWORD) {
     entry.count += 1;
@@ -319,15 +305,13 @@ function checkTeacherPassword(req, res) {
     return false;
   }
 
-  teacherLoginAttempts.delete(ip); // succès : on oublie les essais précédents
+  teacherLoginAttempts.delete(ip);
   return true;
 }
 
 async function generateUniqueCode() {
   for (let i = 0; i < 20; i++) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
-    // On vérifie parmi TOUS les codes, y compris désactivés : un code désactivé
-    // ne doit jamais être réattribué à quelqu'un d'autre.
     const existing = await lookupStudent(code, { activeOnly: false });
     if (existing.status === "absent") return code;
     if (existing.status === "indisponible") throw new Error("Base élèves indisponible.");
@@ -390,9 +374,6 @@ app.get("/api/status", requireStudent, (req, res) => {
   });
 });
 
-// L'élève choisit son option (A ou B) une fois, au premier passage sur le
-// module E31/E32 — nécessaire pour que les mises en situation fictives
-// restent cohérentes avec son type de vente (magasin vs B2B/rendez-vous).
 app.post("/api/student/option", requireStudent, async (req, res) => {
   const option = String(req.body.option || "").trim().toUpperCase();
   if (option !== "A" && option !== "B") {
@@ -420,10 +401,7 @@ app.post("/api/student/option", requireStudent, async (req, res) => {
   }
 });
 
-/* ---------- Point hebdomadaire E31/E32 : compétence de la semaine ---------- */
 app.get("/api/competences", (req, res) => {
-  // Référentiel public (contenu pédagogique, pas de donnée personnelle) : utile
-  // au menu déroulant de la page enseignant pour choisir la compétence de la semaine.
   const list = Object.entries(COMPETENCES_E31E32).map(([code, c]) => ({ code, bloc: c.bloc, epreuve: c.epreuve, libelle: c.libelle }));
   res.json(list);
 });
@@ -488,10 +466,6 @@ app.post("/api/teacher/weekly-focus", async (req, res) => {
   }
 });
 
-/* ---------- Voix OpenAI (facultatif) ---------- */
-// Voix par défaut du catalogue OpenAI (changeables via variables d'environnement
-// OPENAI_VOICE_MALE / OPENAI_VOICE_FEMALE si vous voulez essayer d'autres voix :
-// alloy, echo, fable, onyx, nova, shimmer).
 function openaiVoice(gender) {
   if (gender === "female") return process.env.OPENAI_VOICE_FEMALE || "nova";
   return process.env.OPENAI_VOICE_MALE || "onyx";
@@ -534,14 +508,13 @@ app.post("/api/speech", requireStudent, async (req, res) => {
   }
 });
 
-/* ---------- Historique des évaluations (Supabase, facultatif) ---------- */
 function extractScore(text) {
   const m = String(text || "").match(/NOTE GLOBALE\s*:\s*([\d]+(?:[.,][\d]+)?)\s*\/\s*20/i);
   return m ? Number(m[1].replace(",", ".")) : null;
 }
 
 async function saveEvaluation({ code, name, diploma, evaluationText, transcript }) {
-  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return; // pas configuré : on ignore silencieusement
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/evaluations`, {
       method: "POST",
@@ -565,7 +538,6 @@ async function saveEvaluation({ code, name, diploma, evaluationText, transcript 
   }
 }
 
-/* ---------- Historique des positionnements E31/E32 (Supabase) ---------- */
 function extractNiveauGlobal(text) {
   const m = String(text || "").match(/NIVEAU GLOBAL\s*:\s*(Novice|Débrouillé|Averti|Expert)/i);
   return m ? m[1] : null;
@@ -598,7 +570,6 @@ async function savePositionnement({ code, name, option, competenceCode, competen
   }
 }
 
-/* ---------- Prompt du professionnel — point hebdomadaire E31/E32 ---------- */
 function contexteOption(option) {
   if (option === "B") {
     return "L'élève est en option B (Prospection Clientèle et Valorisation de l'Offre Commerciale) : ses mises en situation relèvent typiquement d'une vente sur rendez-vous ou en B2B (banque, assurance, immobilier, automobile, agence de communication...), pas d'une vente spontanée en rayon.";
@@ -681,9 +652,6 @@ app.post("/api/positionnement/turn", requireStudent, async (req, res) => {
   const competence = competenceOrNull(req.body.competenceCode);
   if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
   const option = req.body.option === "B" ? "B" : "A";
-  // Seuls les tours de conversation viennent du client ; la consigne du
-  // professionnel est reconstruite ici, à partir de la compétence choisie
-  // par l'enseignant — jamais transmise (ni modifiable) depuis le navigateur.
   const turns = Array.isArray(req.body.turns) ? req.body.turns : [];
   const messages = [{ role: "user", content: POSITIONNEMENT_RULES(competence, option) }, ...turns];
 
@@ -736,6 +704,61 @@ app.get("/api/teacher/positionnements", async (req, res) => {
   }
 });
 
+/* ---------- Tableau de bord enseignant : un statut par élève, en un coup d'œil ----------
+   Règles, volontairement simples et lisibles :
+   - "alerte" (rouge)  : moyenne E33 < 10/20, ou dernier positionnement E31/E32 = Novice.
+   - "suivre" (orange) : moyenne E33 entre 10 et 12/20, ou aucun passage encore effectué.
+   - "ok" (vert)       : le reste.
+   Les élèves "alerte" sont toujours renvoyés en premier, pour que l'enseignant
+   n'ait pas à chercher dans la liste qui a besoin d'attention. */
+app.get("/api/teacher/dashboard", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base non configurée." });
+
+  try {
+    const headers = { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` };
+    const [studentsRes, evalsRes, posRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/students?active=eq.true&select=code,nom,classe&order=nom.asc`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/evaluations?select=student_code,score,created_at&order=created_at.desc&limit=1000`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/positionnements?select=student_code,niveau_global,created_at&order=created_at.desc&limit=1000`, { headers })
+    ]);
+    const students = await studentsRes.json();
+    const evaluations = await evalsRes.json();
+    const positionnements = await posRes.json();
+
+    const rows = (Array.isArray(students) ? students : []).map(s => {
+      const mesEvals = evaluations.filter(e => e.student_code === s.code && Number.isFinite(Number(e.score)));
+      const mesPositionnements = positionnements.filter(p => p.student_code === s.code);
+
+      const nbEval = mesEvals.length;
+      const moyenneEval = nbEval ? Math.round((mesEvals.reduce((a, e) => a + Number(e.score), 0) / nbEval) * 10) / 10 : null;
+      const nbPositionnement = mesPositionnements.length;
+      const dernierNiveau = nbPositionnement ? mesPositionnements[0].niveau_global : null;
+
+      let statut = "ok";
+      if (nbEval === 0 && nbPositionnement === 0) {
+        statut = "suivre";
+      } else {
+        if ((moyenneEval !== null && moyenneEval < 10) || dernierNiveau === "Novice") statut = "alerte";
+        else if (moyenneEval !== null && moyenneEval < 12) statut = "suivre";
+      }
+
+      return {
+        code: s.code, nom: s.nom, classe: s.classe,
+        nbEval, moyenneEval, nbPositionnement, dernierNiveau, statut
+      };
+    });
+
+    const ordre = { alerte: 0, suivre: 1, ok: 2 };
+    rows.sort((a, b) => ordre[a.statut] - ordre[b.statut] || a.nom.localeCompare(b.nom));
+
+    res.json(rows);
+  } catch (e) {
+    console.error("Erreur tableau de bord:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger le tableau de bord." });
+  }
+});
+
 function extractJson(text) {
   try { return JSON.parse(text.trim()); } catch { /* continue */ }
   const match = text.match(/\{[\s\S]*\}/);
@@ -771,17 +794,12 @@ async function callClaude(messages, maxTokens) {
   return block ? block.text : "";
 }
 
-// Remarque : le préremplissage de réponse ("assistant" en fin de liste) n'est
-// pas supporté par ce modèle (Claude Sonnet 5) — on s'appuie donc uniquement
-// sur la consigne stricte du prompt et sur l'extraction tolérante ci-dessus.
 async function callClaudeJSON(messages, maxTokens) {
   return await callClaude(messages, maxTokens);
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// Essaie jusqu'à 3 fois, en silence, avant d'abandonner : un élève en oral
-// d'examen ne doit (presque) jamais voir une erreur technique.
 async function getValidReply(messages, maxTokens, attempts = 3) {
   let lastErr = null;
   for (let i = 0; i < attempts; i++) {
@@ -792,16 +810,12 @@ async function getValidReply(messages, maxTokens, attempts = 3) {
       lastErr = { code: "reponse_invalide", raw: text };
     } catch (e) {
       lastErr = e;
-      if (e.code === "no_api_key") throw e; // inutile de réessayer sans clé
+      if (e.code === "no_api_key") throw e;
     }
     if (i < attempts - 1) await sleep(400);
   }
   console.error("Échec après plusieurs tentatives:", lastErr);
 
-  // Filet de sécurité : si Claude a quand même écrit une réplique plausible
-  // (juste sans l'emballage JSON demandé), on l'utilise plutôt que de bloquer
-  // l'élève avec une erreur — mieux vaut une réplique sans étiquette d'état
-  // qu'un écran d'erreur en pleine conversation.
   const raw = lastErr && typeof lastErr.raw === "string" ? lastErr.raw.trim() : "";
   const looksUsable = raw.length > 0 && raw.length < 600 && !raw.startsWith("{") && !/^\s*<|^\s*```/.test(raw);
   if (looksUsable) return { replique: raw, etat: "en_cours" };
@@ -811,7 +825,6 @@ async function getValidReply(messages, maxTokens, attempts = 3) {
   throw err;
 }
 
-// Un tour de dialogue (négociation ou oral) : renvoie {replique, etat}
 app.post("/api/turn", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
   if (minutes >= MONTHLY_LIMIT_MINUTES) {
@@ -829,7 +842,6 @@ app.post("/api/turn", requireStudent, async (req, res) => {
   }
 });
 
-// Évaluation finale : renvoie {text}
 app.post("/api/evaluate", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
   if (minutes >= MONTHLY_LIMIT_MINUTES) {
@@ -852,10 +864,6 @@ app.post("/api/evaluate", requireStudent, async (req, res) => {
 
 app.get("/api/health", (req, res) => res.json({ ok: true, clef: Boolean(ANTHROPIC_API_KEY) }));
 
-// Filet de sécurité : si jamais un message dépasse quand même la limite,
-// on renvoie une vraie erreur JSON exploitable par le client, plutôt que
-// de laisser Express répondre en texte brut (ce qui donnait un message
-// générique et peu clair à l'élève).
 app.use((err, req, res, next) => {
   if (err && err.type === "entity.too.large") {
     return res.status(413).json({ error: "message_trop_volumineux", message: "Votre échange est devenu trop long pour être envoyé d'un coup. Terminez l'oral et consultez votre évaluation, puis recommencez une nouvelle session si besoin." });

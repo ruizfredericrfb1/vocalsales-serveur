@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>VocalSales — Simulateur de vente</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Newsreader:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Poppins:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     box-sizing: border-box;
@@ -41,15 +41,15 @@
   h1 { font-size: 1.8rem; margin: 0; }
   .tagline { color: var(--muted); margin: 4px 0 24px; }
   .hidden { display: none !important; }
-  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: #1a1540; }
+  body:has(#screenLanding:not(.hidden)), body:has(#screenLogin:not(.hidden)) { background: linear-gradient(135deg, #1a1540 0%, #3d1f6b 55%, #5b1f5e 100%); }
   .ico { width: 1.15em; height: 1.15em; vertical-align: -0.2em; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   button .ico { margin-right: .45em; }
   #micBtn .ico { margin-right: 0; width: 1.6rem; height: 1.6rem; vertical-align: middle; }
-  h2, .group-title, .scenario strong { font-family: "Newsreader", Georgia, serif; font-weight: 600; }
-  .landing-hero-wrap, .dark-wrap, .topbar { box-shadow: 0 0 0 100vmax #1a1540; clip-path: inset(0 -100vmax); }
+  h2, .group-title, .scenario strong { font-family: "Poppins", sans-serif; font-weight: 800; }
+  .landing-hero-wrap, .dark-wrap, .topbar { background: linear-gradient(135deg, #1a1540 0%, #3d1f6b 55%, #5b1f5e 100%); box-shadow: 0 0 0 100vmax #3d1f6b; clip-path: inset(0 -100vmax); }
 
   .landing-hero-wrap {
-    background: #1a1540; color: #ece7fb; margin: -28px -20px 0; padding: 44px 20px 40px;
+    background: transparent; color: #ece7fb; margin: -28px -20px 0; padding: 48px 20px 44px;
   }
   .landing-hero { max-width: 640px; margin: 0 auto; }
   .landing-badge {
@@ -58,8 +58,8 @@
     margin-bottom: 22px;
   }
   .landing-hero h1 {
-    font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.5rem;
-    line-height: 1.15; margin: 0 0 14px; color: #ffffff; letter-spacing: -.01em;
+    font-family: "Poppins", sans-serif; font-weight: 800; font-size: 2.9rem;
+    line-height: 1.05; margin: 0 0 16px; color: #ffffff; letter-spacing: -.02em;
   }
   .landing-hero .tagline { color: #b9aee0; font-size: 1.08rem; max-width: 46ch; margin: 0 0 32px; }
 
@@ -69,12 +69,12 @@
   }
   .landing-line { display: grid; gap: 3px; }
   .landing-line .who { font-size: .78rem; color: #a695e0; }
-  .landing-line .said { font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eee7fb; }
+  .landing-line .said { font-style: italic; font-size: 1.05rem; line-height: 1.4; color: #eee7fb; }
   .landing-line.candidat .who { color: #ffb020; }
   .landing-line.candidat .said { color: #ffe6b3; }
 
   .landing-hero .actions { margin: 0; }
-  #landingStartBtn { background: #ffb020; color: #251c57; }
+  #landingStartBtn { background: #ffb020; color: #251c57; box-shadow: 0 8px 28px -6px rgba(255,176,32,.55); font-size: 1.08rem; padding: 16px 30px; }
   #landingStartBtn:hover { background: #ffc658; }
 
   .landing-lower { max-width: 640px; margin: 44px auto 0; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.12); }
@@ -85,9 +85,9 @@
   .landing-feature + .landing-feature { border-top: 1px solid rgba(255,255,255,.1); }
   .landing-privacy { color: #b9aee0; font-size: .85rem; margin: 10px 0 0; }
 
-  .dark-wrap { background: #1a1540; color: #ece7fb; margin: -28px -20px 0; padding: 44px 20px 48px; }
+  .dark-wrap { background: transparent; color: #ece7fb; margin: -28px -20px 0; padding: 48px 20px 48px; }
   .dark-inner { max-width: 640px; margin: 0 auto; }
-  .dark-wrap h1 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 2.2rem; line-height: 1.15; color: #ffffff; margin: 0 0 10px; }
+  .dark-wrap h1 { font-family: "Poppins", sans-serif; font-weight: 800; font-size: 2.2rem; line-height: 1.15; color: #ffffff; margin: 0 0 10px; }
   .dark-wrap .tagline { color: #b9aee0; margin: 0 0 26px; }
   .dark-card { background: #251c57; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; }
   .dark-card label { color: #ece7fb; }
@@ -95,8 +95,8 @@
   .dark-card input[type="text"]:focus-visible { border-color: #ffb020; }
   .dark-card .status { color: #b9aee0; margin: 0; min-height: 0; }
   .dark-card .status.err { color: #ffb4a8; }
-  .dark-card #loginBtn { background: #ffb020; color: #251c57; }
-  .dark-card button.secondary { color: #ece7fb; border-color: rgba(255,255,255,.3); }
+  .dark-card #loginBtn { background: #ffb020; color: #251c57; box-shadow: 0 8px 24px -6px rgba(255,176,32,.5); }
+  .dark-card button.secondary { color: #ece7fb; border-color: rgba(255,255,255,.3); border-radius: 999px; }
   .dark-card button:focus-visible { outline-color: #ffb020; }
   .privacy-note { color: #b9aee0; font-size: .84rem; line-height: 1.5; margin: 18px 0 0; }
 
@@ -108,16 +108,17 @@
   .choice-grid { display: grid; gap: 14px; margin: 0 0 14px; }
   .scenario {
     text-align: left; background: var(--card); color: var(--ink);
-    border: 2px solid var(--line); border-radius: 18px; padding: 22px 20px;
-    font: inherit; cursor: pointer; display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 18px;
+    border: 2px solid var(--line); border-radius: 24px; padding: 22px 20px;
+    font: inherit; cursor: pointer; display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 18px;
   }
   .scenario:hover, .scenario:focus-visible { border-color: var(--accent); outline: none; }
   .scenario-icon {
-    width: 56px; height: 56px; border-radius: 14px; flex: none;
+    width: 58px; height: 58px; border-radius: 20px; flex: none;
     display: flex; align-items: center; justify-content: center;
-    background: var(--client); color: var(--accent);
+    background: linear-gradient(135deg, #5b3fd1, #9d7bff); color: #ffffff;
+    box-shadow: 0 6px 16px -4px rgba(91,63,209,.5);
   }
-  .scenario--weekly .scenario-icon { background: var(--client2); color: var(--accent2); }
+  .scenario--weekly .scenario-icon { background: linear-gradient(135deg, #ff8a3d, #ffb020); box-shadow: 0 6px 16px -4px rgba(255,138,61,.5); }
   .scenario-text { display: grid; gap: 3px; }
   .scenario strong { font-size: 1.15rem; }
   .scenario span { color: var(--muted); font-size: .92rem; }
@@ -133,8 +134,8 @@
   }
   input[type="text"]:focus-visible, select:focus-visible { outline: none; border-color: var(--accent); }
 
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: #1a1540; color: #ece7fb; font-size: .92rem; margin: -28px -20px 22px; padding: 14px 20px; }
-  .topbar .brand { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 1.3rem; color: #ffffff; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: transparent; color: #ece7fb; font-size: .92rem; margin: -28px -20px 22px; padding: 16px 20px; }
+  .topbar .brand { font-family: "Poppins", sans-serif; font-weight: 800; font-size: 1.3rem; color: #ffffff; }
   .topbar-meta { display: grid; justify-items: end; gap: 2px; text-align: right; }
   .topbar .who { color: #b9aee0; }
   .quota { font-weight: 700; color: #ffb020; }
@@ -163,12 +164,12 @@
   }
   textarea:focus-visible { outline: none; border-color: var(--accent); }
   button {
-    font: inherit; font-weight: 700; border: 0; border-radius: 12px; cursor: pointer;
-    padding: 12px 18px; background: var(--accent); color: var(--accent-ink);
+    font: inherit; font-weight: 800; border: 0; border-radius: 999px; cursor: pointer;
+    padding: 14px 24px; background: var(--accent); color: var(--accent-ink);
   }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-  button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  button.secondary { background: transparent; color: var(--ink); border: 2px solid var(--line); border-radius: 999px; }
   #micBtn { min-width: 64px; font-size: 1.4rem; touch-action: none; user-select: none; -webkit-user-select: none; }
 
   .timer {

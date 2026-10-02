@@ -11,23 +11,16 @@ const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.CLAUDE_MODEL || "claude-haiku-4-5-20251001";
 const MONTHLY_LIMIT_MINUTES = Number(process.env.MONTHLY_LIMIT_MINUTES || 85);
-// Seuil (en minutes restantes) en dessous duquel on avertit explicitement l'élève.
 const WARNING_THRESHOLD_MINUTES = Number(process.env.WARNING_THRESHOLD_MINUTES || 5);
-// Supabase (facultatif) : garde un historique permanent des évaluations.
-// Si absent, tout continue de fonctionner normalement, juste sans historique.
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
-// Mot de passe pour la page enseignant (gestion des élèves sans passer par GitHub).
 const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "ORT2026";
-// Voix OpenAI (facultatif) : si absent, le navigateur utilise sa propre voix.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
-// Vitesse d'élocution (0.25 à 4.0 ; 1.0 = normal). Réglable via OPENAI_TTS_SPEED.
 const OPENAI_TTS_SPEED = Number(process.env.OPENAI_TTS_SPEED || 1.15);
-// Coût estimé (en minutes de quota) de chaque type d'appel.
 const COST_TURN = 1;
 const COST_EVAL = 3;
-const COST_POSITIONNEMENT = 2; // point hebdomadaire E31/E32 : plus court qu'une évaluation E33
+const COST_POSITIONNEMENT = 2;
 
 const STUDENTS_FILE = path.join(__dirname, "students.csv");
 const USAGE_FILE = path.join(__dirname, "data", "usage.json");
@@ -224,11 +217,10 @@ function competenceOrNull(code) {
 }
 
 const app = express();
-app.set("trust proxy", true); // Render est derrière un proxy : nécessaire pour obtenir la vraie IP du visiteur
+app.set("trust proxy", true);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ---------- Élèves : Supabase en priorité, fichier CSV en secours ---------- */
 function supabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 }
@@ -277,7 +269,6 @@ async function requireStudent(req, res, next) {
   next();
 }
 
-/* ---------- Espace enseignant : ajouter des élèves sans passer par GitHub ---------- */
 const TEACHER_LOGIN_MAX_ATTEMPTS = 8;
 const TEACHER_LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
 const teacherLoginAttempts = new Map();
@@ -570,6 +561,39 @@ async function savePositionnement({ code, name, option, competenceCode, competen
   }
 }
 
+/* ---------- Série de semaines consécutives (point hebdomadaire) ----------
+   Semaine = groupe de 7 jours depuis un lundi de référence fixe, pas le
+   calendrier civil — évite les faux positifs autour du changement d'année.
+   Deux passages la même semaine ne comptent qu'une fois. */
+const STREAK_EPOCH_MONDAY = Date.UTC(2024, 0, 1);
+function weekIndex(dateStr) {
+  const diffDays = Math.floor((new Date(dateStr).getTime() - STREAK_EPOCH_MONDAY) / 86400000);
+  return Math.floor(diffDays / 7);
+}
+function computeStreak(dateStrings) {
+  const weeks = [...new Set(dateStrings.map(weekIndex))].sort((a, b) => b - a);
+  if (!weeks.length) return 0;
+  let streak = 1;
+  for (let i = 1; i < weeks.length; i++) {
+    if (weeks[i - 1] - weeks[i] === 1) streak++;
+    else break;
+  }
+  return streak;
+}
+async function getStudentStreak(code) {
+  if (!supabaseConfigured()) return 0;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/positionnements?student_code=eq.${encodeURIComponent(code)}&select=created_at&order=created_at.desc&limit=100`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    return computeStreak((Array.isArray(rows) ? rows : []).map(r => r.created_at));
+  } catch (e) {
+    console.error("Erreur calcul série:", e && e.message);
+    return 0;
+  }
+}
+
 function contexteOption(option) {
   if (option === "B") {
     return "L'élève est en option B (Prospection Clientèle et Valorisation de l'Offre Commerciale) : ses mises en situation relèvent typiquement d'une vente sur rendez-vous ou en B2B (banque, assurance, immobilier, automobile, agence de communication...), pas d'une vente spontanée en rayon.";
@@ -679,12 +703,13 @@ app.post("/api/positionnement/evaluate", requireStudent, async (req, res) => {
     const prompt = POSITIONNEMENT_EVAL_PROMPT(competence, transcript);
     const text = await callClaude([{ role: "user", content: prompt }], 900);
     consumeQuota(req.studentCode, COST_POSITIONNEMENT);
-    savePositionnement({
+    await savePositionnement({
       code: req.studentCode, name: req.studentName, option,
       competenceCode: req.body.competenceCode, competenceLibelle: competence.libelle,
       evaluationText: text, transcript
     });
-    res.json({ text });
+    const streak = await getStudentStreak(req.studentCode);
+    res.json({ text, streak });
   } catch (e) {
     res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
   }
@@ -704,13 +729,6 @@ app.get("/api/teacher/positionnements", async (req, res) => {
   }
 });
 
-/* ---------- Tableau de bord enseignant : un statut par élève, en un coup d'œil ----------
-   Règles, volontairement simples et lisibles :
-   - "alerte" (rouge)  : moyenne E33 < 10/20, ou dernier positionnement E31/E32 = Novice.
-   - "suivre" (orange) : moyenne E33 entre 10 et 12/20, ou aucun passage encore effectué.
-   - "ok" (vert)       : le reste.
-   Les élèves "alerte" sont toujours renvoyés en premier, pour que l'enseignant
-   n'ait pas à chercher dans la liste qui a besoin d'attention. */
 app.get("/api/teacher/dashboard", async (req, res) => {
   if (!checkTeacherPassword(req, res)) return;
   if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base non configurée." });

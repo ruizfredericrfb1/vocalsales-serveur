@@ -183,6 +183,22 @@
   #presMicBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .65; } }
+  .streak-badge {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 16px;
+    background: linear-gradient(135deg, #ff8a3d, #ffb020); color: #2a1200;
+    border-radius: 18px; padding: 14px 18px; font-weight: 800;
+    box-shadow: 0 8px 20px -6px rgba(255,138,61,.5);
+    animation: streakPop .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .streak-badge .flame { font-size: 1.8rem; line-height: 1; }
+  .streak-badge .count { font-size: 1.3rem; }
+  .streak-badge .label { font-weight: 600; font-size: .92rem; opacity: .85; }
+  @keyframes streakPop {
+    0% { transform: scale(.6); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { .streak-badge { animation: none; } }
   @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 
@@ -322,6 +338,7 @@
 
     <section id="screenPositionnementResult" class="hidden">
       <h2>Votre positionnement</h2>
+      <div class="streak-badge hidden" id="streakBadge"></div>
       <div class="debrief" id="positionnementDebrief">Analyse en cours…</div>
       <div class="actions">
         <button id="positionnementAgainBtn" type="button">Retour</button>
@@ -703,7 +720,7 @@ async function apiPositionnementEvaluate(transcript) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data.text;
+  return data;
 }
 
 const ACK_FILLERS = ["D'accord.", "Très bien.", "Je vois.", "Entendu.", "Merci."];
@@ -926,12 +943,26 @@ async function positionnementEvaluate() {
   const transcript = turns.map(t => (t.role === "user" ? "CANDIDAT : " : "LE PROFESSIONNEL : ") + t.content).join("\n");
 
   box.textContent = "Analyse en cours…";
+  $("streakBadge").classList.add("hidden");
   try {
-    box.textContent = await apiPositionnementEvaluate(transcript);
+    const result = await apiPositionnementEvaluate(transcript);
+    box.textContent = result.text;
+    renderStreakBadge(result.streak);
     refreshQuota();
   } catch (e) {
     box.textContent = errorText(e);
   }
+}
+
+function renderStreakBadge(streak) {
+  const el = $("streakBadge");
+  if (!streak || streak < 1) { el.classList.add("hidden"); return; }
+  if (streak === 1) {
+    el.innerHTML = '<span class="flame">🔥</span><span class="label">Première semaine — reviens la semaine prochaine pour démarrer ta série !</span>';
+  } else {
+    el.innerHTML = '<span class="flame">🔥</span><span><span class="count">' + streak + '</span> <span class="label">semaines d\'affilée, continue comme ça !</span></span>';
+  }
+  el.classList.remove("hidden");
 }
 $("positionnementAgainBtn").onclick = () => {
   currentMode = "examen";

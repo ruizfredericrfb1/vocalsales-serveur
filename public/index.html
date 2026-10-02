@@ -215,8 +215,8 @@
 
   @media print {
     body * { visibility: hidden; }
-    #debrief, #debrief * { visibility: visible; }
-    #debrief { position: absolute; top: 0; left: 0; width: 100%; background: #fff; color: #000; }
+    #debrief, #debrief *, #positionnementDebrief, #positionnementDebrief * { visibility: visible; }
+    #debrief, #positionnementDebrief { position: absolute; top: 0; left: 0; width: 100%; background: #fff; color: #000; }
   }
 </style>
 </head>
@@ -328,6 +328,7 @@
         <h2 id="focusTitle" style="margin:0;">Compétence de la semaine</h2>
         <p id="focusLibelle" style="margin:0; font-size:1.05rem;"></p>
         <p id="focusEpreuve" style="margin:0; color:var(--muted); font-size:.92rem;"></p>
+        <p style="margin:0; color:var(--muted); font-size:.92rem;">Le client, les produits, les prix sont à inventer — ce qui compte, c'est la façon dont tu mènes l'échange, pas la réalité du catalogue.</p>
         <div class="status err" id="focusError"></div>
         <div class="actions" style="margin-top:0;">
           <button id="focusStartBtn" type="button">Commencer</button>
@@ -337,11 +338,22 @@
     </section>
 
     <section id="screenPositionnementResult" class="hidden">
-      <h2>Votre positionnement</h2>
-      <div class="streak-badge hidden" id="streakBadge"></div>
-      <div class="debrief" id="positionnementDebrief">Analyse en cours…</div>
-      <div class="actions">
-        <button id="positionnementAgainBtn" type="button">Retour</button>
+      <div class="card" id="posReflectionBlock">
+        <h2 style="margin:0;">Avant de voir ton évaluation</h2>
+        <p style="margin:0; color:var(--muted);">Qu'est-ce que tu retiens de cet échange ? (ce n'est pas noté, juste pour toi)</p>
+        <textarea id="posReflectionInput" placeholder="Ce que j'ai bien fait, ce que je referais autrement…" style="min-height:80px;"></textarea>
+        <div class="actions" style="margin-top:0;">
+          <button id="posReflectionContinueBtn" type="button">Voir mon évaluation</button>
+        </div>
+      </div>
+      <div id="posResultContent" class="hidden">
+        <h2>Votre positionnement</h2>
+        <div class="streak-badge hidden" id="streakBadge"></div>
+        <div class="debrief" id="positionnementDebrief">Analyse en cours…</div>
+        <div class="actions">
+          <button class="secondary" id="posPrintBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>Enregistrer en PDF</button>
+          <button id="positionnementAgainBtn" type="button">Retour</button>
+        </div>
       </div>
     </section>
 
@@ -934,16 +946,26 @@ async function positionnementEvaluate() {
   stopSpeaking();
   if (recognition && listening) recognition.stop();
   showScreen("positionnementResult");
-  const box = $("positionnementDebrief");
   const sellerTurns = turns.filter(t => t.role === "user").length;
   if (sellerTurns < 1) {
-    box.textContent = "L'échange est trop court pour être positionné. Recommencez la semaine prochaine.";
+    $("posReflectionBlock").classList.add("hidden");
+    $("posResultContent").classList.remove("hidden");
+    $("streakBadge").classList.add("hidden");
+    $("positionnementDebrief").textContent = "L'échange est trop court pour être positionné. Recommencez la semaine prochaine.";
     return;
   }
-  const transcript = turns.map(t => (t.role === "user" ? "CANDIDAT : " : "LE PROFESSIONNEL : ") + t.content).join("\n");
+  $("posReflectionInput").value = "";
+  $("posReflectionBlock").classList.remove("hidden");
+  $("posResultContent").classList.add("hidden");
+}
 
+$("posReflectionContinueBtn").onclick = async () => {
+  $("posReflectionBlock").classList.add("hidden");
+  $("posResultContent").classList.remove("hidden");
+  const box = $("positionnementDebrief");
   box.textContent = "Analyse en cours…";
   $("streakBadge").classList.add("hidden");
+  const transcript = turns.map(t => (t.role === "user" ? "CANDIDAT : " : "LE PROFESSIONNEL : ") + t.content).join("\n");
   try {
     const result = await apiPositionnementEvaluate(transcript);
     box.textContent = result.text;
@@ -952,7 +974,8 @@ async function positionnementEvaluate() {
   } catch (e) {
     box.textContent = errorText(e);
   }
-}
+};
+$("posPrintBtn").onclick = () => window.print();
 
 function renderStreakBadge(streak) {
   const el = $("streakBadge");

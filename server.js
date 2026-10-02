@@ -601,9 +601,28 @@ function contexteOption(option) {
   return "L'élève est en option A (Animation et Gestion de l'Espace Commercial) : ses mises en situation relèvent typiquement d'une vente en magasin, avec une clientèle qui entre spontanément dans l'espace de vente.";
 }
 
-function POSITIONNEMENT_RULES(competence, option) {
+function POSITIONNEMENT_PREPARE_PROMPT(competence, option) {
   const criteresTxt = competence.criteres.map(c => `- ${c.nom}`).join("\n");
-  return `Tu es un professionnel du secteur commerce/vente qui suit un(e) apprenti(e) de Bac Pro MCV tout au long de l'année, lors d'un point rapide hebdomadaire de 7 minutes en classe — pas un examen, un point d'étape régulier.
+  return `Tu prépares un point hebdomadaire de mise en situation (10 minutes) pour un(e) apprenti(e) de Bac Pro MCV, sur la compétence "${competence.libelle}" (${competence.epreuve}).
+
+${contexteOption(option)}
+
+Les points précis à explorer pendant la mise en situation :
+${criteresTxt}
+
+Prépare DEUX éléments distincts, cohérents entre eux :
+
+1. UNE RESSOURCE FACTUELLE courte (quelques lignes) que l'élève pourra consulter avant et pendant la séance : par exemple une fiche produit (nom, prix, caractéristiques) pour une compétence tournée vers la vente, ou une politique de l'entreprise (délais, conditions, procédure) pour une compétence tournée vers le suivi ou la logistique. Donne des faits neutres, concrets et utiles — JAMAIS une indication sur quoi répondre, quoi proposer ou comment argumenter. L'élève doit s'en servir lui-même, pas la suivre comme un script.
+
+2. UNE SITUATION professionnelle précise et inédite à jouer : choisis un interlocuteur cohérent avec le SENS de la compétence (un client pour une compétence tournée vers la vente, les réclamations ou la satisfaction client ; un responsable, un collègue ou un fournisseur pour une compétence tournée vers la veille, le suivi interne ou la logistique). Précise aussi le canal (face à face, téléphone, ou message écrit — varie librement) et le ton de l'interlocuteur (pressé, mécontent, posé, agréable, hésitant... — varie librement). Cette situation doit être cohérente avec la ressource ci-dessus et avec l'option de l'élève — jamais un décor générique ou déjà vu, invente à chaque fois.
+
+FORMAT DE RÉPONSE — RÈGLE ABSOLUE : un seul objet JSON valide, rien avant, rien après :
+{"resource": "la ressource factuelle, en français", "situation": "description de la situation à jouer en 2-3 phrases : qui, canal, ton, contexte"}`;
+}
+
+function POSITIONNEMENT_RULES(competence, option, situation) {
+  const criteresTxt = competence.criteres.map(c => `- ${c.nom}`).join("\n");
+  return `Tu incarnes l'interlocuteur d'une mise en situation professionnelle, pour un point hebdomadaire de 10 minutes d'un(e) apprenti(e) de Bac Pro MCV — pas un examen, un point d'étape régulier.
 
 ${contexteOption(option)}
 
@@ -611,37 +630,39 @@ LA COMPÉTENCE VISÉE AUJOURD'HUI (${competence.epreuve}) : "${competence.libell
 Les points précis à explorer :
 ${criteresTxt}
 
-DÉROULEMENT ATTENDU — toujours une mise en situation jouée, jamais une question sur son vécu passé :
-1. Choisis un interlocuteur cohérent avec le SENS de la compétence du jour — jamais au hasard. Un client convient aux compétences tournées vers la vente, les réclamations ou la satisfaction client. Un responsable, un collègue ou un fournisseur convient mieux aux compétences tournées vers la veille, le suivi interne ou la logistique. Ne crée jamais une situation où l'interlocuteur ne correspond pas logiquement à la compétence.
-2. Varie librement, d'une séance à l'autre, le canal de l'échange (face à face, téléphone, message écrit/SMS) et le ton de l'interlocuteur (pressé, mécontent, posé, agréable, hésitant...) — ces deux éléments sont indépendants de la compétence, change-les pour exposer l'élève à des situations différentes au fil des semaines.
-3. Décris brièvement, en tant que narrateur (hors personnage), ce contexte précis et inédit (qui, canal, ton, situation concrète), cohérent avec son option — jamais un décor générique ou déjà vu, invente à chaque fois.
-4. Pour lancer l'échange, choisis l'UNE des deux approches suivantes, en variant d'une fois sur l'autre plutôt que de toujours faire la même :
-   a) Termine ta description par une question simple et directe : "Qu'est-ce que tu lui dis ?" (jamais "vas-y", jamais de double question) ;
-   b) Ou bascule directement dans la peau de l'interlocuteur et prononce sa toute première réplique, à la première personne, adaptée au canal choisi (ex. : une réplique orale en face à face, ou le contenu d'un message écrit s'il s'agit d'un SMS) — l'élève doit alors répondre directement à ce qui vient d'être dit ou écrit, sans qu'on le lui demande.
-5. Une fois l'échange lancé, reste dans la peau de l'interlocuteur : relance 1 à 2 fois (un rebondissement, une objection, une précision) pour pousser l'élève à réellement démontrer les points ci-dessus — pas seulement les énoncer.
-6. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
-7. Ne demande jamais à l'élève de raconter une expérience passée : il doit agir dans la situation, pas la décrire.
+LA SITUATION À JOUER (déjà présentée à l'élève, avec une ressource factuelle qu'il a sous les yeux) :
+${situation}
+
+DÉROULEMENT ATTENDU :
+1. Tu es UNIQUEMENT cet interlocuteur, jamais un narrateur : exprime son propre point de vue, ses besoins, ses réactions, ses objections.
+2. INTERDIT ABSOLU, règle la plus importante : ne pose JAMAIS de question de diagnostic, technique ou commerciale à la place de l'élève (par exemple, ne demande jamais "c'est plutôt ceci ou cela ?", ne l'aide jamais à cerner son propre besoin). C'est à l'ÉLÈVE d'interroger et de proposer, jamais l'inverse — toi, tu ne fais que réagir à ce qu'il te dit, avec ton propre ressenti.
+3. Ta toute première réplique lance directement l'échange, à la première personne, comme si tu venais d'arriver dans cette situation — jamais de narration, jamais de question du type "qu'est-ce que tu lui dis".
+4. Relance ensuite 1 à 2 fois (un rebondissement, une objection, une précision de ta part) pour pousser l'élève à réellement démontrer les points ci-dessus — pas seulement les énoncer.
+5. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
+6. Ne demande jamais à l'élève de raconter une expérience passée : il doit agir dans la situation, pas la décrire.
 
 RÈGLES :
-- Tu es UNIQUEMENT ce professionnel. Ne donne jamais la réponse, ne sors jamais du rôle.
+- VOUVOIE l'élève par défaut, comme le ferait un vrai client ou un responsable — sauf si la situation décrit explicitement un collègue proche, où le tutoiement est alors naturel.
 - Une seule réplique courte à la fois, 1 question maximum.
-- Registre oral naturel et tutoiement (relation de suivi dans la durée, pas un jury formel) : phrases courtes, parfois inachevées, hésitations légères ("bon", "donc", "alors").
+- Registre oral naturel : phrases courtes, parfois inachevées, hésitations légères ("bon", "donc", "alors").
 - INTERDIT : tout mot vague ou familier ("un truc", "un machin", "un genre de", "un peu tout", "ça"). Utilise toujours le terme précis du métier (la commande, la réclamation, le client, le produit, le service...) — tu modélises toi-même une communication professionnelle, exactement ce que tu évalues chez l'élève.
 - N'ouvre jamais par "merci", "d'accord", "très bien" — enchaîne directement sur le fond.
 - Ne redis jamais mot pour mot une réplique déjà dite dans cet échange.
-- Passe "etat" à "conclu" après 2 à 4 échanges de fond avec l'élève (le format est volontairement court, 7 minutes) — jamais après une seule réponse creuse, mais sans t'éterniser non plus.
+- Passe "etat" à "conclu" après 3 à 5 échanges de fond avec l'élève (le format est de 10 minutes) — jamais après une seule réponse creuse, mais sans t'éterniser non plus.
 
 FORMAT DE RÉPONSE — RÈGLE ABSOLUE : un seul objet JSON valide, rien avant, rien après :
 {"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}`;
 }
 
-function POSITIONNEMENT_EVAL_PROMPT(competence, transcript) {
+function POSITIONNEMENT_EVAL_PROMPT(competence, transcript, situation) {
   const criteresTxt = competence.criteres.map(c =>
     `${c.nom} :\n  1 (Novice) : ${c.niveaux[0]}\n  2 (Débrouillé) : ${c.niveaux[1]}\n  3 (Averti) : ${c.niveaux[2]}\n  4 (Expert) : ${c.niveaux[3]}`
   ).join("\n\n");
   const commTxt = `${COMMUNICATION_CRITERE.nom} :\n  1 (Novice) : ${COMMUNICATION_CRITERE.niveaux[0]}\n  2 (Débrouillé) : ${COMMUNICATION_CRITERE.niveaux[1]}\n  3 (Averti) : ${COMMUNICATION_CRITERE.niveaux[2]}\n  4 (Expert) : ${COMMUNICATION_CRITERE.niveaux[3]}`;
 
-  return `Tu es un professionnel qui positionne un(e) apprenti(e) de Bac Pro MCV sur la compétence "${competence.libelle}" (${competence.epreuve}), à partir d'un point hebdomadaire de 7 minutes. Positionne STRICTEMENT à partir des preuves présentes dans la transcription — jamais sur une impression générale, jamais sur une capacité supposée.
+  return `Tu es un professionnel qui positionne un(e) apprenti(e) de Bac Pro MCV sur la compétence "${competence.libelle}" (${competence.epreuve}), à partir d'un point hebdomadaire de 10 minutes. Positionne STRICTEMENT à partir des preuves présentes dans la transcription — jamais sur une impression générale, jamais sur une capacité supposée.
+
+La situation jouée était : ${situation}
 
 Transcription complète :
 ${transcript}
@@ -664,12 +685,34 @@ CRITÈRES ÉVALUÉS
 ${competence.criteres.map(c => `${c.nom} : [niveau] — une phrase citant un élément précis`).join("\n")}
 ${COMMUNICATION_CRITERE.nom} : [niveau] — une phrase
 
-LA SITUATION JOUÉE
-Une phrase rappelant brièvement le contexte (qui était l'interlocuteur, par quel canal, et la situation).
-
 CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;
 }
+
+app.post("/api/positionnement/prepare", requireStudent, async (req, res) => {
+  const { minutes } = getStudentUsage(req.studentCode);
+  if (minutes >= MONTHLY_LIMIT_MINUTES) {
+    return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
+  }
+  const competence = competenceOrNull(req.body.competenceCode);
+  if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
+  const option = req.body.option === "B" ? "B" : "A";
+
+  try {
+    const prompt = POSITIONNEMENT_PREPARE_PROMPT(competence, option);
+    const text = await callClaude([{ role: "user", content: prompt }], 500);
+    const parsed = extractJson(text);
+    if (!parsed || !parsed.resource || !parsed.situation) {
+      const err = new Error("reponse_invalide");
+      err.code = "reponse_invalide";
+      throw err;
+    }
+    consumeQuota(req.studentCode, COST_TURN);
+    res.json({ resource: String(parsed.resource), situation: String(parsed.situation) });
+  } catch (e) {
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+  }
+});
 
 app.post("/api/positionnement/turn", requireStudent, async (req, res) => {
   const { minutes } = getStudentUsage(req.studentCode);
@@ -679,8 +722,10 @@ app.post("/api/positionnement/turn", requireStudent, async (req, res) => {
   const competence = competenceOrNull(req.body.competenceCode);
   if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
   const option = req.body.option === "B" ? "B" : "A";
+  const situation = String(req.body.situation || "").trim().slice(0, 2000);
+  if (!situation) return res.status(400).json({ error: "requete_invalide", message: "Situation manquante." });
   const turns = Array.isArray(req.body.turns) ? req.body.turns : [];
-  const messages = [{ role: "user", content: POSITIONNEMENT_RULES(competence, option) }, ...turns];
+  const messages = [{ role: "user", content: POSITIONNEMENT_RULES(competence, option, situation) }, ...turns];
 
   try {
     const parsed = await getValidReply(messages, 400);
@@ -699,11 +744,12 @@ app.post("/api/positionnement/evaluate", requireStudent, async (req, res) => {
   const competence = competenceOrNull(req.body.competenceCode);
   if (!competence) return res.status(400).json({ error: "requete_invalide", message: "Compétence inconnue." });
   const option = req.body.option === "B" ? "B" : "A";
+  const situation = String(req.body.situation || "").trim().slice(0, 2000);
   const transcript = String(req.body.transcript || "").slice(0, 20000);
   if (transcript.length < 50) return res.status(400).json({ error: "requete_invalide", message: "Échange trop court." });
 
   try {
-    const prompt = POSITIONNEMENT_EVAL_PROMPT(competence, transcript);
+    const prompt = POSITIONNEMENT_EVAL_PROMPT(competence, transcript, situation);
     const text = await callClaude([{ role: "user", content: prompt }], 900);
     consumeQuota(req.studentCode, COST_POSITIONNEMENT);
     await savePositionnement({

@@ -183,12 +183,6 @@
   #presMicBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   #micBtn.listening { background: var(--rec); animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .65; } }
-  .resource-panel {
-    background: var(--client2); border: 1px solid var(--line); border-radius: 14px;
-    padding: 12px 16px; margin-bottom: 12px; font-size: .95rem;
-  }
-  .resource-panel summary { cursor: pointer; font-weight: 700; color: var(--accent2); }
-  .resource-panel #resourcePanelText { margin-top: 8px; white-space: pre-wrap; color: var(--ink); }
   .streak-badge {
     display: flex; align-items: center; gap: 12px; margin: 0 0 16px;
     background: linear-gradient(135deg, #ff8a3d, #ffb020); color: #2a1200;
@@ -342,19 +336,6 @@
       </div>
     </section>
 
-    <section id="screenResource" class="hidden">
-      <div class="card">
-        <h2 style="margin:0;">Avant de commencer</h2>
-        <p style="margin:0; color:var(--muted);">Prenez le temps de lire ces informations — elles resteront affichées pendant toute la séance. Le chronomètre de 10 minutes ne démarre qu'au clic sur « Commencer ».</p>
-        <div class="debrief" id="resourceText">Préparation en cours…</div>
-        <div class="status err" id="resourceError"></div>
-        <div class="actions" style="margin-top:0;">
-          <button id="resourceStartBtn" type="button">Je suis prêt, commencer</button>
-          <button class="secondary" id="resourceBackBtn" type="button">Retour</button>
-        </div>
-      </div>
-    </section>
-
     <section id="screenPositionnementResult" class="hidden">
       <h2>Votre positionnement</h2>
       <div class="streak-badge hidden" id="streakBadge"></div>
@@ -413,10 +394,6 @@
         <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réécouter</button>
       </div>
       <div class="timer hidden" id="posTimer" style="font-size:1.6rem;">10:00</div>
-      <details class="resource-panel hidden" id="resourcePanel" open>
-        <summary>Informations à disposition</summary>
-        <div id="resourcePanelText"></div>
-      </details>
       <div class="chat" id="chat" aria-live="polite"></div>
       <div class="status" id="status"></div>
       <button class="secondary hidden" id="retryBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réessayer l'envoi</button>
@@ -560,7 +537,7 @@ Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSeg
 const $ = (id) => document.getElementById(id);
 const screens = {
   setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief"),
-  option: $("screenOption"), focus: $("screenFocus"), resource: $("screenResource"), positionnementResult: $("screenPositionnementResult")
+  option: $("screenOption"), focus: $("screenFocus"), positionnementResult: $("screenPositionnementResult")
 };
 function showScreen(name) {
   for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
@@ -571,8 +548,6 @@ let scenario = null;
 let currentMode = "examen";
 let studentOption = null;
 let posCompetence = null;
-let posSituation = "";
-let posResourceText = "";
 let turns = [];
 let busy = false;
 let finished = false;
@@ -729,19 +704,10 @@ async function apiWeeklyFocus() {
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
   return data;
 }
-async function apiPositionnementPrepare() {
-  const r = await fetch("/api/positionnement/prepare", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, competenceCode: posCompetence.code, option: studentOption })
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
-  return data; // {resource, situation}
-}
 async function apiPositionnementTurn(turnsList) {
   const r = await fetch("/api/positionnement/turn", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, competenceCode: posCompetence.code, option: studentOption, situation: posSituation, turns: turnsList })
+    body: JSON.stringify({ code: studentCode, competenceCode: posCompetence.code, option: studentOption, turns: turnsList })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
@@ -750,7 +716,7 @@ async function apiPositionnementTurn(turnsList) {
 async function apiPositionnementEvaluate(transcript) {
   const r = await fetch("/api/positionnement/evaluate", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: studentCode, competenceCode: posCompetence.code, option: studentOption, situation: posSituation, transcript })
+    body: JSON.stringify({ code: studentCode, competenceCode: posCompetence.code, option: studentOption, transcript })
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
@@ -875,37 +841,15 @@ async function openFocusScreen() {
 }
 $("focusBackBtn").onclick = () => showScreen("setup");
 
-$("focusStartBtn").onclick = () => openResourceScreen();
-
-async function openResourceScreen() {
-  if (!posCompetence) return;
-  $("resourceError").textContent = "";
-  $("resourceText").textContent = "Préparation en cours…";
-  $("resourceStartBtn").classList.add("hidden");
-  showScreen("resource");
-  try {
-    const prep = await apiPositionnementPrepare();
-    posSituation = prep.situation;
-    posResourceText = prep.resource;
-    $("resourceText").textContent = posResourceText;
-    $("resourceStartBtn").classList.remove("hidden");
-  } catch (e) {
-    $("resourceText").textContent = "";
-    $("resourceError").textContent = e.message || "Impossible de préparer la séance. Réessayez.";
-  }
-}
-$("resourceBackBtn").onclick = () => showScreen("focus");
-$("resourceStartBtn").onclick = () => startPositionnementSession();
+$("focusStartBtn").onclick = () => startPositionnementSession();
 
 async function startPositionnementSession() {
-  if (!posCompetence || !posSituation) return;
+  if (!posCompetence) return;
   currentMode = "positionnement";
   turns = []; finished = false; lastClientLine = "";
   $("chat").innerHTML = "";
   $("scenarioTitle").textContent = posCompetence.epreuve + " — " + posCompetence.libelle;
   $("posTimer").classList.remove("hidden");
-  $("resourcePanelText").textContent = posResourceText;
-  $("resourcePanel").classList.remove("hidden");
   posRemaining = 600;
   updatePosTimerDisplay();
   showScreen("chat");
@@ -1023,8 +967,6 @@ function renderStreakBadge(streak) {
 $("positionnementAgainBtn").onclick = () => {
   currentMode = "examen";
   $("posTimer").classList.add("hidden");
-  $("resourcePanel").classList.add("hidden");
-  posSituation = ""; posResourceText = "";
   showScreen("setup");
 };
 
@@ -1414,8 +1356,6 @@ $("quitBtn").onclick = () => {
   clearInterval(presTimerId);
   clearInterval(posTimerId);
   $("posTimer").classList.add("hidden");
-  $("resourcePanel").classList.add("hidden");
-  posSituation = ""; posResourceText = "";
   currentMode = "examen";
   if (listening) { userStopped = true; recognition.stop(); }
   showScreen("setup");

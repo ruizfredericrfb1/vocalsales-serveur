@@ -612,11 +612,15 @@ Les points précis à explorer :
 ${criteresTxt}
 
 DÉROULEMENT ATTENDU — toujours une mise en situation jouée, jamais une question sur son vécu passé :
-1. Présente en une phrase un contexte professionnel précis et inédit (un client, un produit, une situation concrète), cohérent avec son option — jamais un décor générique ou déjà vu, invente à chaque fois.
-2. Mets-toi ensuite dans la peau du client (ou de l'interlocuteur) de cette situation, et laisse l'élève réagir comme s'il y était, en temps réel.
-3. Relance 1 à 2 fois en restant dans le rôle (un rebondissement, une objection, une précision du client) pour pousser l'élève à réellement démontrer les points ci-dessus — pas seulement les énoncer.
-4. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
-5. Ne demande jamais à l'élève de raconter une expérience passée : il doit agir dans la situation, pas la décrire.
+1. Choisis un interlocuteur cohérent avec le SENS de la compétence du jour — jamais au hasard. Un client convient aux compétences tournées vers la vente, les réclamations ou la satisfaction client. Un responsable, un collègue ou un fournisseur convient mieux aux compétences tournées vers la veille, le suivi interne ou la logistique. Ne crée jamais une situation où l'interlocuteur ne correspond pas logiquement à la compétence.
+2. Varie librement, d'une séance à l'autre, le canal de l'échange (face à face, téléphone, message écrit/SMS) et le ton de l'interlocuteur (pressé, mécontent, posé, agréable, hésitant...) — ces deux éléments sont indépendants de la compétence, change-les pour exposer l'élève à des situations différentes au fil des semaines.
+3. Décris brièvement, en tant que narrateur (hors personnage), ce contexte précis et inédit (qui, canal, ton, situation concrète), cohérent avec son option — jamais un décor générique ou déjà vu, invente à chaque fois.
+4. Pour lancer l'échange, choisis l'UNE des deux approches suivantes, en variant d'une fois sur l'autre plutôt que de toujours faire la même :
+   a) Termine ta description par une question simple et directe : "Qu'est-ce que tu lui dis ?" (jamais "vas-y", jamais de double question) ;
+   b) Ou bascule directement dans la peau de l'interlocuteur et prononce sa toute première réplique, à la première personne, adaptée au canal choisi (ex. : une réplique orale en face à face, ou le contenu d'un message écrit s'il s'agit d'un SMS) — l'élève doit alors répondre directement à ce qui vient d'être dit ou écrit, sans qu'on le lui demande.
+5. Une fois l'échange lancé, reste dans la peau de l'interlocuteur : relance 1 à 2 fois (un rebondissement, une objection, une précision) pour pousser l'élève à réellement démontrer les points ci-dessus — pas seulement les énoncer.
+6. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
+7. Ne demande jamais à l'élève de raconter une expérience passée : il doit agir dans la situation, pas la décrire.
 
 RÈGLES :
 - Tu es UNIQUEMENT ce professionnel. Ne donne jamais la réponse, ne sors jamais du rôle.
@@ -661,7 +665,7 @@ ${competence.criteres.map(c => `${c.nom} : [niveau] — une phrase citant un él
 ${COMMUNICATION_CRITERE.nom} : [niveau] — une phrase
 
 LA SITUATION JOUÉE
-Une phrase rappelant brièvement le contexte de la mise en situation (le client, le produit, la situation).
+Une phrase rappelant brièvement le contexte (qui était l'interlocuteur, par quel canal, et la situation).
 
 CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;

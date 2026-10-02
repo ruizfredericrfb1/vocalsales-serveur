@@ -611,12 +611,12 @@ LA COMPÉTENCE VISÉE AUJOURD'HUI (${competence.epreuve}) : "${competence.libell
 Les points précis à explorer :
 ${criteresTxt}
 
-DÉROULEMENT ATTENDU :
-1. Commence TOUJOURS par chercher un vécu réel : demande à l'élève s'il lui est arrivé récemment, en entreprise (PFMP), de vivre une situation en lien avec cette compétence. Une seule question ouverte pour démarrer.
-2. S'il a un exemple réel : creuse-le avec 1 à 2 relances précises pour vérifier qu'il maîtrise vraiment les points ci-dessus, pas seulement qu'il décrit les faits.
-3. S'il n'a PAS d'exemple réel (trop tôt dans l'année, jamais rencontré cette situation chez son employeur), bascule sur une mise en situation fictive et courte : invente un contexte précis et inédit (un client, un produit, une situation), cohérent avec son option, et demande-lui de réagir comme s'il y était. Ne réutilise jamais un contexte générique ou déjà vu — invente un décor concret à chaque fois.
-4. Distingue toujours clairement, dans tes questions, si tu parles du VÉCU RÉEL de l'élève ou d'une MISE EN SITUATION fictive — ne mélange jamais les deux sans que ce soit explicite.
-5. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
+DÉROULEMENT ATTENDU — toujours une mise en situation jouée, jamais une question sur son vécu passé :
+1. Présente en une phrase un contexte professionnel précis et inédit (un client, un produit, une situation concrète), cohérent avec son option — jamais un décor générique ou déjà vu, invente à chaque fois.
+2. Mets-toi ensuite dans la peau du client (ou de l'interlocuteur) de cette situation, et laisse l'élève réagir comme s'il y était, en temps réel.
+3. Relance 1 à 2 fois en restant dans le rôle (un rebondissement, une objection, une précision du client) pour pousser l'élève à réellement démontrer les points ci-dessus — pas seulement les énoncer.
+4. Reste concentré sur la seule compétence du jour — ne dévie pas vers d'autres compétences.
+5. Ne demande jamais à l'élève de raconter une expérience passée : il doit agir dans la situation, pas la décrire.
 
 RÈGLES :
 - Tu es UNIQUEMENT ce professionnel. Ne donne jamais la réponse, ne sors jamais du rôle.
@@ -650,7 +650,6 @@ ${commTxt}
 
 RÈGLES DE POSITIONNEMENT :
 - N'attribue jamais "Expert" sans une preuve précise et citable dans la transcription.
-- Si la mise en situation était fictive plutôt qu'un vécu réel, dis-le explicitement — ça ne pénalise pas l'élève, mais ça doit être noté.
 - Si un critère n'a pas été assez exploré pour juger, dis-le plutôt que de deviner.
 
 Rédige en français simple, adressé directement à l'élève (tutoiement), texte brut sans Markdown. Structure exacte :
@@ -661,8 +660,8 @@ CRITÈRES ÉVALUÉS
 ${competence.criteres.map(c => `${c.nom} : [niveau] — une phrase citant un élément précis`).join("\n")}
 ${COMMUNICATION_CRITERE.nom} : [niveau] — une phrase
 
-CE QUI A ÉTÉ VU
-Une ou deux phrases précisant si l'échange portait sur un vécu réel en PFMP, une mise en situation fictive, ou les deux.
+LA SITUATION JOUÉE
+Une phrase rappelant brièvement le contexte de la mise en situation (le client, le produit, la situation).
 
 CONSEIL POUR LA PROCHAINE FOIS
 Une seule phrase.`;

@@ -20,7 +20,7 @@ const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1";
 const OPENAI_TTS_SPEED = Number(process.env.OPENAI_TTS_SPEED || 1.15);
 const COST_TURN = 1;
 const COST_EVAL = 3;
-const COST_POSITIONNEMENT = 2;
+const COST_POSITIONNEMENT = 3;
 
 const STUDENTS_FILE = path.join(__dirname, "students.csv");
 const USAGE_FILE = path.join(__dirname, "data", "usage.json");
@@ -603,7 +603,7 @@ function contexteOption(option) {
 
 function POSITIONNEMENT_RULES(competence, option) {
   const criteresTxt = competence.criteres.map(c => `- ${c.nom}`).join("\n");
-  return `Tu animes un point hebdomadaire de mise en situation (10 minutes) pour un(e) apprenti(e) de Bac Pro MCV — pas un examen, un point d'étape régulier.
+  return `Tu animes un point hebdomadaire de mise en situation (quelques minutes, sans chronomètre strict) pour un(e) apprenti(e) de Bac Pro MCV — pas un examen, un point d'étape régulier.
 
 ${contexteOption(option)}
 
@@ -632,7 +632,7 @@ RÈGLES :
 - INTERDIT : tout mot vague ou familier ("un truc", "un machin", "un genre de", "un peu tout", "ça"). Utilise toujours le terme précis du métier (la commande, la réclamation, le client, le produit, le service...) — tu modélises toi-même une communication professionnelle, exactement ce que tu évalues chez l'élève.
 - N'ouvre jamais par "merci", "d'accord", "très bien" — enchaîne directement sur le fond.
 - Ne redis jamais mot pour mot une réplique déjà dite dans cet échange.
-- Passe "etat" à "conclu" après 3 à 5 échanges de fond avec l'élève (le format est de 10 minutes) — jamais après une seule réponse creuse, mais sans t'éterniser non plus.
+- Passe "etat" à "conclu" après 3 à 5 échanges de fond avec l'élève — jamais après une seule réponse creuse, mais sans t'éterniser non plus : le format est court par nature, pas chronométré.
 
 FORMAT DE RÉPONSE — RÈGLE ABSOLUE : un seul objet JSON valide, rien avant, rien après :
 {"replique": "ta réplique à l'oral", "etat": "en_cours" | "conclu"}`;
@@ -644,7 +644,7 @@ function POSITIONNEMENT_EVAL_PROMPT(competence, transcript) {
   ).join("\n\n");
   const commTxt = `${COMMUNICATION_CRITERE.nom} :\n  1 (Novice) : ${COMMUNICATION_CRITERE.niveaux[0]}\n  2 (Débrouillé) : ${COMMUNICATION_CRITERE.niveaux[1]}\n  3 (Averti) : ${COMMUNICATION_CRITERE.niveaux[2]}\n  4 (Expert) : ${COMMUNICATION_CRITERE.niveaux[3]}`;
 
-  return `Tu es un professionnel qui positionne un(e) apprenti(e) de Bac Pro MCV sur la compétence "${competence.libelle}" (${competence.epreuve}), à partir d'un point hebdomadaire de 10 minutes. Positionne STRICTEMENT à partir des preuves présentes dans la transcription — jamais sur une impression générale, jamais sur une capacité supposée.
+  return `Tu es un professionnel qui positionne un(e) apprenti(e) de Bac Pro MCV sur la compétence "${competence.libelle}" (${competence.epreuve}), à partir d'un point hebdomadaire. Positionne STRICTEMENT à partir des preuves présentes dans la transcription — jamais sur une impression générale, jamais sur une capacité supposée.
 
 Transcription complète :
 ${transcript}
@@ -715,6 +715,19 @@ app.post("/api/positionnement/evaluate", requireStudent, async (req, res) => {
     res.json({ text, streak });
   } catch (e) {
     res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+  }
+});
+
+app.get("/api/positionnement/history", requireStudent, async (req, res) => {
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/positionnements?student_code=eq.${encodeURIComponent(req.studentCode)}&select=competence_code,competence_libelle,niveau_global,created_at&order=created_at.desc&limit=50`, {
+      headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` }
+    });
+    const rows = await r.json();
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger votre historique." });
   }
 });
 

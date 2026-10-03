@@ -122,6 +122,9 @@
   .scenario-text { display: grid; gap: 3px; }
   .scenario strong { font-size: 1.15rem; }
   .scenario span { color: var(--muted); font-size: .92rem; }
+  .history-item { background: var(--client); border-radius: 12px; padding: 12px 16px; }
+  .history-item strong { display: block; font-size: .98rem; }
+  .history-item span { display: block; color: var(--muted); font-size: .85rem; margin-top: 2px; }
 
   .card {
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
@@ -256,7 +259,7 @@
         </div></div>
         <div class="landing-feature"><div>
           <strong>Un suivi chaque semaine, toute l'année</strong>
-          <span>10 minutes avec un professionnel, sur les compétences E31/E32 travaillées en classe.</span>
+          <span>Quelques minutes avec un professionnel, sur les compétences E31/E32 travaillées en classe.</span>
         </div></div>
         <div class="landing-feature"><div>
           <strong>Une progression visible pour votre enseignant</strong>
@@ -305,9 +308,21 @@
           </span>
           <span class="scenario-text">
             <strong>Point de la semaine — E31/E32</strong>
-            <span>10 minutes avec un professionnel, sur la compétence en cours en classe</span>
+            <span>Quelques minutes avec un professionnel, sur la compétence en cours en classe</span>
           </span>
         </button>
+      </div>
+      <p style="margin:10px 2px 0;"><button class="secondary" id="openHistoryBtn" type="button" style="padding:8px 16px; font-size:.92rem;">Voir mes positionnements précédents</button></p>
+    </section>
+
+    <section id="screenHistory" class="hidden">
+      <div class="card">
+        <h2 style="margin:0;">Mes positionnements</h2>
+        <div id="historyStatus" class="status">Chargement…</div>
+        <div id="historyList" class="hidden" style="display:grid; gap:10px;"></div>
+        <div class="actions" style="margin-top:0;">
+          <button class="secondary" id="historyBackBtn" type="button">Retour</button>
+        </div>
       </div>
     </section>
 
@@ -405,7 +420,7 @@
         <h2 id="scenarioTitle"></h2>
         <button class="secondary" id="replayBtn" title="Réécouter la dernière réplique"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réécouter</button>
       </div>
-      <div class="timer hidden" id="posTimer" style="font-size:1.6rem;">10:00</div>
+      <div class="timer hidden" id="posTimer" style="font-size:1.6rem; color:var(--muted);">0:00</div>
       <div class="chat" id="chat" aria-live="polite"></div>
       <div class="status" id="status"></div>
       <button class="secondary hidden" id="retryBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Réessayer l'envoi</button>
@@ -549,7 +564,7 @@ Les répliques d'accueil ont déjà été dites, dans cet ordre : ${s.openingSeg
 const $ = (id) => document.getElementById(id);
 const screens = {
   setup: $("screenSetup"), prep: $("screenPrep"), presentation: $("screenPresentation"), chat: $("screenChat"), debrief: $("screenDebrief"),
-  option: $("screenOption"), focus: $("screenFocus"), positionnementResult: $("screenPositionnementResult")
+  option: $("screenOption"), focus: $("screenFocus"), positionnementResult: $("screenPositionnementResult"), history: $("screenHistory")
 };
 function showScreen(name) {
   for (const [k, el] of Object.entries(screens)) el.classList.toggle("hidden", k !== name);
@@ -734,6 +749,12 @@ async function apiPositionnementEvaluate(transcript) {
   if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
   return data;
 }
+async function apiPositionnementHistory() {
+  const r = await fetch("/api/positionnement/history?code=" + encodeURIComponent(studentCode));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || "erreur"); e.code = data.error; throw e; }
+  return data;
+}
 
 const ACK_FILLERS = ["D'accord.", "Très bien.", "Je vois.", "Entendu.", "Merci."];
 let lastAckIndex = -1;
@@ -805,13 +826,12 @@ $("retryBtn").onclick = () => {
 };
 
 let posTimerId = null;
-let posRemaining = 600;
+let posElapsed = 0;
+const POS_SAFETY_LIMIT_SECONDS = 900; // filet de sécurité large (15 min) ; ne se déclenche quasiment jamais
 
 function updatePosTimerDisplay() {
-  const r = Math.max(posRemaining, 0);
-  const m = Math.floor(r / 60), sec = r % 60;
+  const m = Math.floor(posElapsed / 60), sec = posElapsed % 60;
   $("posTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
-  $("posTimer").classList.toggle("urgent", r <= 60);
 }
 
 $("startPositionnementBtn").onclick = async () => {
@@ -862,7 +882,7 @@ async function startPositionnementSession() {
   $("chat").innerHTML = "";
   $("scenarioTitle").textContent = posCompetence.epreuve + " — " + posCompetence.libelle;
   $("posTimer").classList.remove("hidden");
-  posRemaining = 600;
+  posElapsed = 0;
   updatePosTimerDisplay();
   showScreen("chat");
   setBusy(true);
@@ -871,9 +891,9 @@ async function startPositionnementSession() {
 
   clearInterval(posTimerId);
   posTimerId = setInterval(() => {
-    posRemaining--;
+    posElapsed++;
     updatePosTimerDisplay();
-    if (posRemaining <= 0) { clearInterval(posTimerId); if (!finished) positionnementEvaluate(); }
+    if (posElapsed >= POS_SAFETY_LIMIT_SECONDS) { clearInterval(posTimerId); if (!finished) positionnementEvaluate(); }
   }, 1000);
 
   try {
@@ -1385,6 +1405,33 @@ $("quitBtn").onclick = () => {
 };
 $("againBtn").onclick = () => showScreen("setup");
 $("printBtn").onclick = () => window.print();
+
+$("openHistoryBtn").onclick = async () => {
+  showScreen("history");
+  $("historyStatus").textContent = "Chargement…";
+  $("historyStatus").classList.remove("err");
+  $("historyList").classList.add("hidden");
+  try {
+    const rows = await apiPositionnementHistory();
+    if (!rows.length) {
+      $("historyStatus").textContent = "Aucun positionnement pour l'instant.";
+      return;
+    }
+    $("historyStatus").textContent = "";
+    $("historyList").innerHTML = rows.map(r => {
+      const date = r.created_at ? new Date(r.created_at).toLocaleDateString("fr-FR") : "";
+      return `<div class="history-item">
+        <strong>${r.competence_libelle || r.competence_code}</strong>
+        <span>${date}${r.niveau_global ? " — " + r.niveau_global : ""}</span>
+      </div>`;
+    }).join("");
+    $("historyList").classList.remove("hidden");
+  } catch (e) {
+    $("historyStatus").textContent = e.message || "Impossible de charger votre historique.";
+    $("historyStatus").classList.add("err");
+  }
+};
+$("historyBackBtn").onclick = () => showScreen("setup");
 
 renderScenarios();
 </script>

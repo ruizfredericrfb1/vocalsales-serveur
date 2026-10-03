@@ -55,6 +55,11 @@
   th { color: var(--muted); font-size: 0.85rem; }
   .inactive { color: var(--muted); font-style: italic; }
 
+  .pos-group { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .pos-group h3 { margin: 0 0 8px; font-family: "Poppins", sans-serif; font-weight: 700; font-size: 1rem; }
+  .pos-group-item { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: .92rem; }
+  .pos-group-item:first-of-type { border-top: 0; }
+  .pos-group-item .niv { color: var(--muted); white-space: nowrap; }
   .dash-grid { display: grid; gap: 10px; }
   .dash-item {
     display: grid; grid-template-columns: 6px 1fr auto; align-items: center; gap: 14px;
@@ -126,12 +131,9 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0;">Positionnements récents (E31/E32)</h2>
+      <h2 style="margin:0;">Positionnements récents (E31/E32) — par élève</h2>
       <div id="posListStatus" class="status">Chargement…</div>
-      <table id="posTable" class="hidden">
-        <thead><tr><th>Élève</th><th>Compétence</th><th>Niveau</th><th>Date</th></tr></thead>
-        <tbody id="posBody"></tbody>
-      </table>
+      <div id="posGroups" class="hidden" style="display:grid; gap:14px;"></div>
     </div>
   </div>
 </main>
@@ -214,20 +216,30 @@ $("focusSetBtn").onclick = async () => {
 async function loadPositionnements() {
   $("posListStatus").textContent = "Chargement…";
   $("posListStatus").classList.remove("err");
-  $("posTable").classList.add("hidden");
+  $("posGroups").classList.add("hidden");
   try {
     const rows = await api("/api/teacher/positionnements");
-    $("posBody").innerHTML = rows.map(p => {
-      const date = p.created_at ? new Date(p.created_at).toLocaleDateString("fr-FR") : "";
-      return `<tr>
-        <td>${p.student_name || p.student_code}</td>
-        <td>${p.competence_code}</td>
-        <td>${p.niveau_global || "—"}</td>
-        <td>${date}</td>
-      </tr>`;
-    }).join("");
+    const byStudent = new Map();
+    for (const p of rows) {
+      const key = p.student_code;
+      if (!byStudent.has(key)) byStudent.set(key, { name: p.student_name || p.student_code, items: [] });
+      byStudent.get(key).items.push(p);
+    }
+    const groups = [...byStudent.values()].sort((a, b) => a.name.localeCompare(b.name));
+    $("posGroups").innerHTML = groups.map(g => `
+      <div class="pos-group">
+        <h3>${g.name}</h3>
+        ${g.items.map(p => {
+          const date = p.created_at ? new Date(p.created_at).toLocaleDateString("fr-FR") : "";
+          return `<div class="pos-group-item">
+            <span>${p.competence_libelle || p.competence_code}${date ? " — " + date : ""}</span>
+            <span class="niv">${p.niveau_global || "—"}</span>
+          </div>`;
+        }).join("")}
+      </div>
+    `).join("");
     $("posListStatus").textContent = rows.length ? "" : "Aucun positionnement enregistré pour l'instant.";
-    $("posTable").classList.toggle("hidden", rows.length === 0);
+    $("posGroups").classList.toggle("hidden", rows.length === 0);
   } catch (e) {
     $("posListStatus").textContent = e.message || "Impossible de charger les positionnements.";
     $("posListStatus").classList.add("err");

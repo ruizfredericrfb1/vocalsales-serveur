@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VocalSales — Cours : Assurer une veille commerciale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #eef2f0; --card: #ffffff; --ink: #14302a; --muted: #56706a;
+    --accent: #5b3fd1; --accent-ink: #ffffff; --line: #d8d3ee;
+    --ok: #1d7a3e; --ko: #b3261e; --accent2: #9a6b00; --client2: #fdf0d9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1a17; --card: #172521; --ink: #e4efeb; --muted: #9db3ad;
+      --accent: #a78bfa; --accent-ink: #1a1540; --line: #3c3270;
+      --ok: #6fd58f; --ko: #ff8a80; --accent2: #ffcf6b; --client2: #3a2e12;
+    }
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+    font-size: 18px; line-height: 1.5;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 28px 20px 48px; }
+  h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; margin: 0 0 8px; }
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.2rem; }
+  h3 { font-size: 1rem; }
+  .hidden { display: none !important; }
+  .tagline { color: var(--muted); margin: 0 0 20px; }
+
+  .band {
+    background: linear-gradient(135deg, #1a1540 0%, #3d1f6b 55%, #5b1f5e 100%);
+    color: #ece7fb; margin: -28px -20px 24px; padding: 28px 20px 24px;
+    box-shadow: 0 0 0 100vmax #3d1f6b; clip-path: inset(0 -100vmax);
+  }
+  .band h1 { color: #ffffff; margin: 0 0 4px; }
+  .band .tagline { color: #a9bdb3; margin: 0; }
+  .band .crumb { font-size: .85rem; color: #cbb8f5; margin-bottom: 6px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px; display: grid; gap: 12px; margin-bottom: 16px;
+  }
+  .card .step-label {
+    font-family: "Poppins", sans-serif; font-weight: 800; font-size: .82rem;
+    color: var(--accent); text-transform: uppercase; letter-spacing: .04em;
+  }
+  .situation {
+    background: var(--client2); border-left: 4px solid var(--accent2);
+    padding: 14px 16px; border-radius: 8px; font-size: 1rem;
+  }
+  .situation p { margin: 0 0 8px; }
+  .situation p:last-child { margin-bottom: 0; }
+  .situation em { color: var(--accent2); font-style: normal; font-weight: 700; }
+
+  .keywords {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0;
+  }
+  .keyword {
+    background: var(--accent); color: var(--accent-ink);
+    padding: 5px 12px; border-radius: 999px; font-size: .88rem; font-weight: 700;
+  }
+
+  textarea {
+    font: inherit; resize: vertical; min-height: 80px; padding: 12px 14px;
+    border-radius: 12px; border: 2px solid var(--line);
+    background: var(--card); color: var(--ink); width: 100%;
+  }
+  textarea:focus-visible { outline: none; border-color: var(--accent); }
+
+  button {
+    font: inherit; font-weight: 800; border: 0; border-radius: 999px; cursor: pointer;
+    padding: 13px 22px; background: var(--accent); color: var(--accent-ink);
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.secondary {
+    background: transparent; color: var(--ink); border: 2px solid var(--line);
+  }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .qcm { display: grid; gap: 10px; }
+  .qcm button {
+    text-align: left; background: var(--card); color: var(--ink);
+    border: 2px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    font-weight: 400;
+  }
+  .qcm button:hover, .qcm button:focus-visible { border-color: var(--accent); outline: none; }
+  .qcm button.correct { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--card)); }
+  .qcm button.wrong { border-color: var(--ko); background: color-mix(in srgb, var(--ko) 12%, var(--card)); }
+  .feedback { font-weight: 700; margin-top: 6px; min-height: 1.4em; }
+  .feedback.ok { color: var(--ok); }
+  .feedback.ko { color: var(--ko); }
+
+  .progress {
+    display: flex; gap: 6px; margin: 0 0 20px;
+  }
+  .progress span {
+    flex: 1; height: 6px; border-radius: 3px; background: var(--line);
+  }
+  .progress span.done { background: var(--accent); }
+  .progress span.current { background: var(--accent); opacity: .55; }
+
+  .finish {
+    text-align: center; padding: 28px 20px;
+  }
+  .finish .check {
+    display: inline-flex; width: 56px; height: 56px; border-radius: 50%;
+    background: var(--ok); color: #fff; align-items: center; justify-content: center;
+    font-size: 2rem; margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <div class="band">
+    <div class="crumb">Bloc 1 · Conseiller et vendre</div>
+    <h1>Assurer une veille commerciale</h1>
+    <p class="tagline">Première MCV — 12 à 15 min</p>
+  </div>
+
+  <div class="progress" id="progress">
+    <span class="current"></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <!-- ÉTAPE 1 — ACCROCHE -->
+  <section class="card" data-step="1">
+    <div class="step-label">Étape 1 · La situation</div>
+    <h2>Ton premier jour en PFMP</h2>
+    <div class="situation">
+      <p>Tu es en stage dans une enseigne de sport. Un client t'interpelle :</p>
+      <p><em>« Bonjour, je cherche une paire de chaussures pour courir sur route, 3 fois par semaine. J'ai un budget de 100 €. Vous me conseillez quoi ? »</em></p>
+      <p>Tu ne connais pas les chaussures du magasin. Tu ne connais pas les marques. Tu ne sais pas ce qui différencie un modèle route d'un modèle trail.</p>
+      <p><strong>Tu ne peux pas répondre n'importe quoi. Que fais-tu ?</strong></p>
+    </div>
+    <label for="rep1">Ta réponse</label>
+    <textarea id="rep1" placeholder="Écris ce que tu ferais, avec tes mots…"></textarea>
+    <div class="actions">
+      <button id="next1" disabled>Continuer</button>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 2 — OBSERVATION GUIDÉE -->
+  <section class="card hidden" data-step="2">
+    <div class="step-label">Étape 2 · On creuse</div>
+    <h2>Trois questions pour aller plus loin</h2>
+
+    <div class="qcm" id="q2a">
+      <p><strong>1.</strong> Avant de conseiller ce client, qu'est-ce qu'il te manque comme informations ?</p>
+      <button data-ok="1">Connaître les produits du magasin, les différences entre les modèles, ce qui correspond à la course sur route</button>
+      <button data-ok="0">Rien, je peux improviser</button>
+      <button data-ok="0">Juste le prix, c'est tout ce qui compte</button>
+      <div class="feedback" id="fb2a"></div>
+    </div>
+
+    <div class="qcm hidden" id="q2b">
+      <p><strong>2.</strong> Où pourrais-tu trouver ces informations ?</p>
+      <button data-ok="1">Dans le magasin (fiches produits, collègues) et en dehors (site de la marque, avis clients)</button>
+      <button data-ok="0">Uniquement dans ma tête</button>
+      <button data-ok="0">Uniquement sur les réseaux sociaux</button>
+      <div class="feedback" id="fb2b"></div>
+    </div>
+
+    <div class="qcm hidden" id="q2c">
+      <p><strong>3.</strong> Si tu trouves deux informations qui se contredisent, laquelle tu gardes ?</p>
+      <button data-ok="0">La plus ancienne, elle a fait ses preuves</button>
+      <button data-ok="1">La plus récente et la plus fiable (source identifiée)</button>
+      <button data-ok="0">Peu importe, je choisis au hasard</button>
+      <div class="feedback" id="fb2c"></div>
+    </div>
+
+    <div class="actions hidden" id="actions2">
+      <button id="next2">Continuer</button>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 3 — L'ESSENTIEL -->
+  <section class="card hidden" data-step="3">
+    <div class="step-label">Étape 3 · L'essentiel</div>
+    <h2>Ce qu'il faut retenir</h2>
+    <p><strong>Assurer une veille commerciale, c'est :</strong></p>
+    <p>Rechercher, trier et actualiser en continu les informations utiles sur :</p>
+    <ul style="margin:0 0 8px 20px; padding:0;">
+      <li><strong>l'entreprise</strong> (ses produits, ses services, ses prix)</li>
+      <li><strong>son marché</strong> (les concurrents, les tendances, les clients)</li>
+      <li><strong>sa zone de chalandise</strong> (la zone géographique d'où viennent les clients)</li>
+    </ul>
+    <p><strong>Pourquoi c'est indispensable ?</strong><br>Pour conseiller le client avec des informations fiables, récentes et utiles.</p>
+    <div class="keywords">
+      <span class="keyword">Information commerciale</span>
+      <span class="keyword">Fiabilité</span>
+      <span class="keyword">Actualité</span>
+      <span class="keyword">Pertinence</span>
+      <span class="keyword">Sources internes</span>
+      <span class="keyword">Sources externes</span>
+      <span class="keyword">Marché</span>
+      <span class="keyword">Zone de chalandise</span>
+    </div>
+    <div class="actions">
+      <button id="next3">Continuer</button>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 4 — VÉRIFICATION -->
+  <section class="card hidden" data-step="4">
+    <div class="step-label">Étape 4 · Vérification</div>
+    <h2>Est-ce que c'est acquis ?</h2>
+
+    <div class="qcm" id="q4a">
+      <p><strong>Q1.</strong> La veille commerciale consiste à :</p>
+      <button data-ok="0">Regarder les vitrines des concurrents</button>
+      <button data-ok="1">Rechercher, trier et actualiser les informations utiles sur l'entreprise et son marché</button>
+      <button data-ok="0">Demander à son chef de rayon ce qu'il faut vendre</button>
+      <div class="feedback" id="fb4a"></div>
+    </div>
+
+    <div class="qcm hidden" id="q4b">
+      <p><strong>Q2.</strong> Une information commerciale doit être :</p>
+      <button data-ok="0">Ancienne mais détaillée</button>
+      <button data-ok="1">Récente, fiable et utile</button>
+      <button data-ok="0">Trouvée sur n'importe quel site</button>
+      <div class="feedback" id="fb4b"></div>
+    </div>
+
+    <div class="qcm hidden" id="q4c">
+      <p><strong>Q3.</strong> Un client te demande un produit que tu ne connais pas. Que fais-tu ?</p>
+      <button data-ok="0">J'invente une réponse pour ne pas paraître incompétent</button>
+      <button data-ok="0">Je dis juste « je ne sais pas »</button>
+      <button data-ok="1">Je vérifie l'information (logiciel, collègue, fiche produit) puis je réponds</button>
+      <div class="feedback" id="fb4c"></div>
+    </div>
+
+    <div class="actions hidden" id="actions4">
+      <button id="next4">Continuer</button>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 5 — APPLICATION -->
+  <section class="card hidden" data-step="5">
+    <div class="step-label">Étape 5 · Application</div>
+    <h2>À toi de jouer</h2>
+    <div class="situation">
+      <p><strong>Mini-cas</strong></p>
+      <p>Tu es vendeur dans une enseigne de cosmétiques naturels. Une cliente te demande :</p>
+      <p><em>« Vous avez une crème hydratante pour peaux sensibles, sans parfum, à moins de 20 € ? »</em></p>
+      <p>Tu ne connais pas bien la gamme.</p>
+    </div>
+    <label for="rep5">Liste 2 sources d'information que tu peux consulter, et dis pour chacune si elle est interne ou externe.</label>
+    <textarea id="rep5" placeholder="Ex : la fiche produit → interne…"></textarea>
+    <div class="actions">
+      <button id="next5" disabled>Continuer</button>
+    </div>
+  </section>
+
+  <!-- ÉTAPE 6 — FIN -->
+  <section class="card hidden" data-step="6">
+    <div class="finish">
+      <div class="check">✓</div>
+      <h2>Cours terminé</h2>
+      <p class="tagline">Tu as vu l'essentiel sur la veille commerciale.</p>
+      <p style="color:var(--muted); font-size:.92rem;">
+        Prochaine étape (à venir) : le Prof IA te posera des questions personnalisées
+        sur ce que tu n'as pas compris.
+      </p>
+    </div>
+    <div class="actions" style="justify-content:center;">
+      <button id="restart">Recommencer</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const steps = [1, 2, 3, 4, 5, 6].map(n => document.querySelector('[data-step="' + n + '"]'));
+
+function goToStep(n) {
+  steps.forEach((el, i) => el.classList.toggle('hidden', i + 1 !== n));
+  const bars = document.querySelectorAll('.progress span');
+  bars.forEach((b, i) => {
+    b.classList.toggle('done', i + 1 < n);
+    b.classList.toggle('current', i + 1 === n);
+  });
+  window.scrollTo(0, 0);
+}
+
+function wireQcm(groupId, feedbackId, nextGroupId) {
+  const group = $(groupId);
+  const fb = $(feedbackId);
+  group.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (group.dataset.locked === '1') return;
+      group.dataset.locked = '1';
+      const ok = btn.dataset.ok === '1';
+      btn.classList.add(ok ? 'correct' : 'wrong');
+      fb.textContent = ok ? 'Exact.' : 'Pas tout à fait. La bonne réponse est en vert.';
+      fb.className = 'feedback ' + (ok ? 'ok' : 'ko');
+      if (!ok) {
+        group.querySelectorAll('button[data-ok="1"]').forEach(b => b.classList.add('correct'));
+      }
+      if (nextGroupId) {
+        setTimeout(() => { $(nextGroupId).classList.remove('hidden'); }, 700);
+      } else {
+        setTimeout(() => { $(groupId).parentElement.querySelector('.actions').classList.remove('hidden'); }, 700);
+      }
+    });
+  });
+}
+
+$('rep1').addEventListener('input', () => { $('next1').disabled = $('rep1').value.trim().length < 5; });
+$('next1').addEventListener('click', () => goToStep(2));
+
+wireQcm('q2a', 'fb2a', 'q2b');
+wireQcm('q2b', 'fb2b', 'q2c');
+wireQcm('q2c', 'fb2c');
+$('next2').addEventListener('click', () => goToStep(3));
+
+$('next3').addEventListener('click', () => goToStep(4));
+
+wireQcm('q4a', 'fb4a', 'q4b');
+wireQcm('q4b', 'fb4b', 'q4c');
+wireQcm('q4c', 'fb4c');
+$('next4').addEventListener('click', () => goToStep(5));
+
+$('rep5').addEventListener('input', () => { $('next5').disabled = $('rep5').value.trim().length < 5; });
+$('next5').addEventListener('click', () => goToStep(6));
+
+$('restart').addEventListener('click', () => location.reload());
+</script>
+</body>
+</html>

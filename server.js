@@ -895,6 +895,106 @@ app.post("/api/evaluate", requireStudent, async (req, res) => {
     res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
   }
 });
+/* ---------- Module Révision (cours E2) ---------- */
+
+const COURS_CATALOGUE_FILE = path.join(__dirname, "public", "cours-catalogue.json");
+
+function loadCoursCatalogue() {
+  try {
+    return JSON.parse(fs.readFileSync(COURS_CATALOGUE_FILE, "utf8"));
+  } catch (e) {
+    console.error("Catalogue cours illisible:", e && e.message);
+    return [];
+  }
+}
+
+app.get("/api/cours/catalogue", requireStudent, async (req, res) => {
+  const catalogue = loadCoursCatalogue();
+  let sessions = [];
+  if (supabaseConfigured()) {
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/cours_sessions?student_code=eq.${encodeURIComponent(req.studentCode)}&select=cours_code,statut,niveau,etape_atteinte,updated_at&order=updated_at.desc`,
+        { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } }
+      );
+      if (r.ok) sessions = await r.json();
+    } catch (e) {
+      console.error("Erreur lecture sessions cours:", e && e.message);
+    }
+  }
+
+  const sessionParCours = {};
+  for (const s of sessions) {
+    if (!sessionParCours[s.cours_code]) sessionParCours[s.cours_code] = s;
+  }
+
+  const enrichi = catalogue.map(c => ({
+    ...c,
+    statut: sessionParCours[c.code] ? sessionParCours[c.code].statut : null,
+    niveau: sessionParCours[c.code] ? sessionParCours[c.code].niveau : null,
+    etape: sessionParCours[c.code] ? sessionParCours[c.code].etape_atteinte : null
+  }));
+
+  res.json({
+    eleve: { code: req.studentCode, nom: req.studentName, option: req.studentOption },
+    cours: enrichi
+  });
+});
+
+app.post("/api/cours/session", requireStudent, async (req, res) => {
+  if (!supabaseConfigured()) {
+    return res.status(503).json({ error: "supabase_non_configure", message: "Non disponible pour le moment." });
+  }
+  const coursCode = String(req.body.cours_code || "").trim();
+  const etape = String(req.body.etape_atteinte || "").trim() || null;
+  const niveau = String(req.body.niveau || "").trim() || null;
+  const statut = String(req.body.statut || "en_cours").trim();
+
+  if (!coursCode) return res.status(400).json({ error: "requete_invalide", message: "Code cours manquant." });
+
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/cours_sessions?student_code=eq.${encodeURIComponent(req.studentCode)}&cours_code=eq.${encodeURIComponent(coursCode)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "apikey": SUPABASE_SECRET_KEY,
+          "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+          "prefer": "return=representation"
+        },
+        body: JSON.stringify({ etape_atteinte: etape, niveau, statut, updated_at: new Date().toISOString() })
+      }
+    );
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length > 0) {
+      return res.json({ ok: true, session: rows[0], action: "updated" });
+    }
+    const r2 = await fetch(`${SUPABASE_URL}/rest/v1/cours_sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=representation"
+      },
+      body: JSON.stringify({
+        student_code: req.studentCode,
+        student_name: req.studentName,
+        cours_code: coursCode,
+        etape_atteinte: etape,
+        niveau,
+        statut
+      })
+    });
+    const rows2 = await r2.json();
+    res.status(201).json({ ok: true, session: rows2[0], action: "created" });
+  } catch (e) {
+    console.error("Erreur session cours:", e && e.message);
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible d'enregistrer la session." });
+  }
+});
+
 
 app.get("/api/health", (req, res) => res.json({ ok: true, clef: Boolean(ANTHROPIC_API_KEY) }));
 

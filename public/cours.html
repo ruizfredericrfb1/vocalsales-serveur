@@ -196,7 +196,7 @@ async function chargerCatalogue() {
         else if (statut === "en_cours") { icone = "▶"; badge = "En cours"; }
         else if (!c.disponible) { badge = "Bientôt"; }
         html += '<a class="' + classes.join(" ") + '" ' +
-          (c.disponible ? 'href="?c=' + c.code + '"' : 'aria-disabled="true"') + '>' +
+                  (c.disponible ? 'href="cours-parcours.html?c=' + c.code + '"' : 'aria-disabled="true"') +
           '<span class="cours-etat">' + icone + '</span>' +
           '<span><span class="cours-titre">' + c.titre + '</span>' +
           '<span class="cours-meta">' + c.epreuve + ' · Bloc ' + c.bloc + '</span></span>' +

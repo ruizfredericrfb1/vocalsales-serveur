@@ -158,6 +158,7 @@ $("loginBtn").onclick = async () => {
   try {
     const infos = await login(code);
     studentCode = code;
+sessionStorage.setItem("vocalsales_code", code);
     $("screenLogin").classList.add("hidden");
     $("screenListe").classList.remove("hidden");
     $("titreListe").textContent = "Bonjour " + (infos.nom || "").split(" ")[0];

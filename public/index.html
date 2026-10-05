@@ -492,6 +492,7 @@ document.getElementById("loginBtn").onclick = async () => {
   try {
     const s = await apiStatus(code);
     studentCode = code;
+        sessionStorage.setItem("vocalsales_code", code);
     studentOption = s.option || null;
     document.getElementById("whoami").textContent = "Connecté(e) : " + s.nom;
     renderQuota(s);

@@ -844,7 +844,9 @@ function updatePosTimerDisplay() {
   const m = Math.floor(posElapsed / 60), sec = posElapsed % 60;
   $("posTimer").textContent = `${m}:${String(sec).padStart(2, "0")}`;
 }
-
+$("startCoursBtn").onclick = () => {
+  location.href = "cours.html";
+};
 $("startPositionnementBtn").onclick = async () => {
   if (!studentOption) { showScreen("option"); return; }
   await openFocusScreen();

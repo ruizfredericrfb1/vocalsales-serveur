@@ -171,6 +171,12 @@ sessionStorage.setItem("vocalsales_code", code);
 
 $("codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
 
+// Si l'élève est déjà connecté (vient de index.html), on saute l'écran de connexion
+const codeExistant = sessionStorage.getItem("vocalsales_code");
+if (codeExistant) {
+  $("codeInput").value = codeExistant;
+  $("loginBtn").click();
+}
 async function chargerCatalogue() {
   $("listeStatus").textContent = "Chargement…";
   $("listeStatus").classList.remove("err");

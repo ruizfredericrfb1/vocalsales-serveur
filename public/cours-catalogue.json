@@ -6,7 +6,16 @@
     "bloc_libelle": "Conseiller et vendre",
     "epreuve": "E31",
     "ordre": 1,
-    "disponible": true
+    "disponible": true,
+    "notion": "Faire de la veille commerciale, c'est chercher, trier et mettre à jour les informations utiles pour bien vendre. Ces informations concernent l'entreprise (ses produits, ses prix), le marché (les concurrents, les tendances, les clients) et la zone de chalandise, c'est-à-dire la zone autour du magasin d'où viennent les clients. Il y a des sources internes (dans l'entreprise : fiches produits, ventes, collègues) et des sources externes (à l'extérieur : sites internet, concurrents, presse, réseaux sociaux). Une bonne information doit être récente, sûre et utile : on la vérifie avant de la donner au client.",
+    "mots_cles": ["information commerciale", "fiabilité", "sources internes", "sources externes", "marché", "zone de chalandise"],
+    "erreurs_classiques": [
+      "Confondre source interne (dans l'entreprise) et source externe (à l'extérieur)",
+      "Croire qu'une information ancienne ou sans source est fiable",
+      "Répondre au client sans vérifier l'information",
+      "Oublier que le vendeur doit aussi connaître sa zone de chalandise"
+    ],
+    "essentiel": "Faire de la veille, c'est chercher, trier et mettre à jour en continu les informations utiles sur son entreprise, son marché et sa zone de chalandise, pour conseiller le client avec des informations sûres et récentes."
   },
   {
     "code": "C1-VENTE",
@@ -47,73 +56,3 @@
   {
     "code": "C2-RETOURS",
     "titre": "Traiter les retours et les réclamations",
-    "bloc": 2,
-    "bloc_libelle": "Suivre les ventes",
-    "epreuve": "E32",
-    "ordre": 6,
-    "disponible": false
-  },
-  {
-    "code": "C2-SATISFACTION",
-    "titre": "S'assurer de la satisfaction du client",
-    "bloc": 2,
-    "bloc_libelle": "Suivre les ventes",
-    "epreuve": "E32",
-    "ordre": 7,
-    "disponible": false
-  },
-  {
-    "code": "C3-INFO",
-    "titre": "Traiter et exploiter l'information client",
-    "bloc": 3,
-    "bloc_libelle": "Fidéliser la clientèle et développer la relation client",
-    "epreuve": "E33",
-    "ordre": 8,
-    "disponible": false
-  },
-  {
-    "code": "C3-FIDELISATION",
-    "titre": "Contribuer aux actions de fidélisation",
-    "bloc": 3,
-    "bloc_libelle": "Fidéliser la clientèle et développer la relation client",
-    "epreuve": "E33",
-    "ordre": 9,
-    "disponible": false
-  },
-  {
-    "code": "C3-EVALUATION",
-    "titre": "Évaluer les actions de fidélisation",
-    "bloc": 3,
-    "bloc_libelle": "Fidéliser la clientèle et développer la relation client",
-    "epreuve": "E33",
-    "ordre": 10,
-    "disponible": false
-  },
-  {
-    "code": "C4A-OPERATIONS",
-    "titre": "Assurer les opérations préalables à la vente",
-    "bloc": 4,
-    "bloc_libelle": "Animer et gérer l'espace commercial (Option A)",
-    "epreuve": "E2",
-    "ordre": 11,
-    "disponible": false
-  },
-  {
-    "code": "C4A-ATTRACTIVITE",
-    "titre": "Rendre l'unité commerciale attractive et fonctionnelle",
-    "bloc": 4,
-    "bloc_libelle": "Animer et gérer l'espace commercial (Option A)",
-    "epreuve": "E2",
-    "ordre": 12,
-    "disponible": false
-  },
-  {
-    "code": "C4A-CLIENTELE",
-    "titre": "Développer la clientèle",
-    "bloc": 4,
-    "bloc_libelle": "Animer et gérer l'espace commercial (Option A)",
-    "epreuve": "E2",
-    "ordre": 13,
-    "disponible": false
-  }
-]

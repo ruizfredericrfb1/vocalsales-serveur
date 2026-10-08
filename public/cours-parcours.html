@@ -127,6 +127,14 @@
   .effort .etoiles { color: var(--accent2); letter-spacing: 2px; font-size: 1.05rem; }
   .effort .modele { font-style: italic; }
   .effort .conseil-forme { font-weight: 700; }
+  .avertissement { background: var(--warnbg); border-left: 4px solid var(--accent2); border-radius: 8px; padding: 12px 16px; font-size: .95rem; }
+  .mention-ia { margin-top: 10px; font-size: .8rem; color: var(--muted); }
+  button.lien { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: .8rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
+  #signalement { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #signalement .boite { background: var(--card); color: var(--ink); border-radius: 14px; padding: 20px 22px; max-width: 520px; width: 100%; display: grid; gap: 12px; max-height: 90vh; overflow: auto; }
+  #signalement select { font: inherit; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--ink); width: 100%; }
+  #signalement .extrait { background: var(--client2); border-left: 4px solid var(--accent2); border-radius: 8px; padding: 10px 12px; font-size: .9rem; max-height: 140px; overflow: auto; }
+  .note-bilan { color: var(--muted); font-size: .9rem; margin: 0; }
   details.rappel { border: 2px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--card); }
   details.rappel summary { cursor: pointer; font-weight: 800; color: var(--accent); }
   details.rappel p { margin: 8px 0 0; }
@@ -215,6 +223,7 @@
         <button class="secondary" id="recommencerBtn">Recommencer</button>
       </div>
     </div>
+    <div class="avertissement"><strong>Ton professeur est une intelligence artificielle.</strong> Elle peut se tromper, comme tout le monde. Si tu repères une erreur ou une formulation étrange, signale-la : vérifier une information, c'est un réflexe de professionnel. Ces résultats t'aident à progresser ; ils ne remplacent pas l'évaluation de ton enseignant.</div>
     <div class="step-label">Avant de commencer</div>
     <h2>Comment veux-tu travailler ?</h2>
     <div class="mode-choix" role="radiogroup" aria-label="Mode de travail">
@@ -294,6 +303,7 @@
       <div id="bilanForme"></div>
       <div id="bilanContenu" class="fil"></div>
       <div id="bilanAudio"></div>
+      <p class="note-bilan">Ce bilan t'aide à progresser : il ne remplace pas l'évaluation de ton enseignant.</p>
     </div>
     <div class="card">
       <h3>Ta fiche de synthèse</h3>
@@ -308,6 +318,28 @@
   </section>
 
 </main>
+
+<!-- Signalement d'un problème -->
+<div id="signalement" class="hidden" role="dialog" aria-modal="true" aria-label="Signaler un problème">
+  <div class="boite">
+    <h2>Signaler un problème</h2>
+    <div class="extrait" id="signalExtrait"></div>
+    <label for="signalMotif">Quel est le problème ?</label>
+    <select id="signalMotif">
+      <option>Une erreur sur le fond</option>
+      <option>Une formulation étrange</option>
+      <option>Une réaction qui ne correspond pas à ma réponse</option>
+      <option>Autre</option>
+    </select>
+    <label for="signalCommentaire">Un commentaire (facultatif)</label>
+    <textarea id="signalCommentaire" style="min-height:80px;" placeholder="Explique en quelques mots…"></textarea>
+    <div class="status" id="signalStatut" aria-live="polite"></div>
+    <div class="actions">
+      <button id="signalEnvoyer">Envoyer le signalement</button>
+      <button class="secondary" id="signalAnnuler">Annuler</button>
+    </div>
+  </div>
+</div>
 
 <!-- Fiche de synthèse -->
 <div id="fiche" class="hidden">
@@ -337,6 +369,8 @@ let dernierBilan = null;
 let busy = false;
 let mode = "audio";   // "audio" (écrit + audio) ou "ecrit" (écrit seul)
 let aDicte = false;
+let contexte = null;   // cadre tiré au sort par le serveur à l'étape 1
+let signalIndex = -1;
 
 const ETAPES = [
   { label: "Situation", num: 1 },
@@ -368,7 +402,7 @@ async function api(path, opts = {}) {
   return data;
 }
 function post(path, body) {
-  return api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: studentCode, ...body }) });
+  return api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: studentCode, ...(contexte ? { contexte } : {}), ...body }) });
 }
 function messageErreur(e) {
   if (e && e.code === "quota_depasse") return "Tu as utilisé tout ton temps du mois. Réessaie le mois prochain.";
@@ -378,7 +412,7 @@ function messageErreur(e) {
 function cleSauvegarde() { return "vocalsales_parcours_" + coursCode + "_" + studentCode; }
 function sauver() {
   try {
-    sessionStorage.setItem(cleSauvegarde(), JSON.stringify({ niveau, etape, historique, attenteContinuer, termine, dernierBilan }));
+    sessionStorage.setItem(cleSauvegarde(), JSON.stringify({ niveau, etape, historique, attenteContinuer, termine, dernierBilan, contexte }));
   } catch (e) { /* pas bloquant */ }
 }
 function lireSauvegarde() {
@@ -562,7 +596,8 @@ function blocEffort(h) {
 function bulleProf(h, index) {
   const paragraphes = String(h.content).split(/\n+/).filter(Boolean).map(p => "<p>" + escapeHtml(p) + "</p>").join("");
   return '<div class="replique-ia">' + paragraphes + blocEffort(h) +
-    '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button></div>';
+    '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
+    '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
 }
 function rendreEtape() {
   let html = "";
@@ -588,6 +623,8 @@ function ajouterChargement() {
 function retirerChargement() { const d = $("chargement"); if (d) d.remove(); }
 
 $("zoneContenu").addEventListener("click", (ev) => {
+  const sg = ev.target.closest(".signaler");
+  if (sg) { ouvrirSignalement(Number(sg.dataset.i)); return; }
   const b = ev.target.closest(".reecouter");
   if (!b) return;
   const h = historique[Number(b.dataset.i)];
@@ -620,6 +657,7 @@ async function demarrerEtape(n) {
 }
 
 function traiterReponse(res) {
+  if (res.contexte) contexte = res.contexte;
   historique.push({
     role: "assistant", content: res.replique, etape,
     expr: res.expression, ortho: res.orthographe || undefined, reformulation: res.reformulation || ""
@@ -671,6 +709,42 @@ $("reponseInput").addEventListener("input", majBoutonEnvoyer);
 $("continuerBtn").addEventListener("click", () => {
   arreterVoix();
   if (etape < 7) demarrerEtape(etape + 1);
+});
+
+/* ---------- Signalement d'un problème ---------- */
+function ouvrirSignalement(index) {
+  const h = historique[index];
+  if (!h) return;
+  signalIndex = index;
+  $("signalExtrait").textContent = h.content;
+  $("signalCommentaire").value = "";
+  $("signalStatut").textContent = "";
+  $("signalEnvoyer").disabled = false;
+  $("signalement").classList.remove("hidden");
+}
+function fermerSignalement() { $("signalement").classList.add("hidden"); signalIndex = -1; }
+$("signalAnnuler").addEventListener("click", fermerSignalement);
+$("signalEnvoyer").addEventListener("click", async () => {
+  const h = historique[signalIndex];
+  if (!h) return fermerSignalement();
+  let precedent = "";
+  for (let i = signalIndex - 1; i >= 0; i--) { if (historique[i].role === "user") { precedent = historique[i].content; break; } }
+  $("signalEnvoyer").disabled = true;
+  $("signalStatut").classList.remove("err");
+  $("signalStatut").innerHTML = '<span class="loading"></span>Envoi en cours…';
+  try {
+    await post("/api/cours/signalement", {
+      cours_code: coursCode, etape: h.etape || etape, niveau,
+      motif: $("signalMotif").value, commentaire: $("signalCommentaire").value,
+      message_prof: h.content, message_eleve: precedent
+    });
+    $("signalStatut").textContent = "Merci, ton signalement a bien été transmis.";
+    setTimeout(fermerSignalement, 1500);
+  } catch (e) {
+    $("signalStatut").textContent = messageErreur(e);
+    $("signalStatut").classList.add("err");
+    $("signalEnvoyer").disabled = false;
+  }
 });
 
 /* ---------- Bilan ---------- */
@@ -735,6 +809,7 @@ async function ouvrirFiche() {
     if (dernierBilan && dernierBilan.points_a_travailler && dernierBilan.points_a_travailler.length) {
       h += "<h3>À retravailler</h3><div class=\"perso\"><ul>" + dernierBilan.points_a_travailler.map(p => "<li>" + escapeHtml(p) + "</li>").join("") + "</ul></div>";
     }
+    h += '<p style="margin-top:16px;color:#56706a;font-size:.8rem;">Fiche générée avec l\'aide d\'une IA, qui peut se tromper : en cas de doute, vérifie dans ton cours. Elle ne remplace pas l\'évaluation de ton enseignant.</p>';
     $("ficheContenu").innerHTML = h;
     $("fiche").classList.remove("hidden");
     $("statusFiche").textContent = "";
@@ -754,7 +829,7 @@ function allerALaListe() { arreterVoix(); location.href = "cours.html"; }
 
 function recommencer() {
   arreterVoix(); effacerSauvegarde();
-  historique = []; etape = 1; termine = false; attenteContinuer = false; dernierBilan = null; busy = false;
+  historique = []; etape = 1; termine = false; attenteContinuer = false; dernierBilan = null; busy = false; contexte = null;
   $("niveauBadge").classList.add("hidden");
   $("progress").innerHTML = "";
   $("screenEtape").classList.add("hidden");
@@ -775,7 +850,7 @@ document.querySelectorAll(".niveau-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     debloquerAudio();
     niveau = btn.dataset.niveau;
-    historique = []; termine = false; dernierBilan = null;
+    historique = []; termine = false; dernierBilan = null; contexte = null;
     afficherBadge();
     $("screenNiveau").classList.add("hidden");
     $("screenEtape").classList.remove("hidden");
@@ -787,7 +862,7 @@ $("repriseBtn").addEventListener("click", () => {
   debloquerAudio();
   const s = lireSauvegarde();
   if (!s) return recommencer();
-  niveau = s.niveau; etape = s.etape; historique = s.historique || [];
+  niveau = s.niveau; etape = s.etape; historique = s.historique || []; contexte = s.contexte || null;
   attenteContinuer = Boolean(s.attenteContinuer); termine = false; dernierBilan = null;
   afficherBadge();
   $("screenNiveau").classList.add("hidden");

@@ -126,6 +126,10 @@
   .effort .lignes { display: flex; gap: 16px; flex-wrap: wrap; }
   .effort .etoiles { color: var(--accent2); letter-spacing: 2px; font-size: 1.05rem; }
   .effort .modele { font-style: italic; }
+  .effort .conseil-forme { font-weight: 700; }
+  details.rappel { border: 2px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--card); }
+  details.rappel summary { cursor: pointer; font-weight: 800; color: var(--accent); }
+  details.rappel p { margin: 8px 0 0; }
   .forme-bilan { display: grid; gap: 6px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; padding: 12px 16px; }
   .forme-bilan .etoiles { color: var(--accent2); letter-spacing: 2px; font-size: 1.1rem; }
   .status { min-height: 1.4em; font-weight: 700; color: var(--muted); }
@@ -551,6 +555,7 @@ function blocEffort(h) {
     lignes += '<span>Orthographe : <span class="etoiles" role="img" aria-label="Orthographe : ' + h.ortho + ' sur 3">' + etoiles(h.ortho) + "</span> " + libelleOrtho + "</span>";
   }
   let html = '<div class="effort"><div class="lignes">' + lignes + "</div>";
+  if (h.expr < 3) html += '<div class="conseil-forme">Pense à répondre par une phrase complète, avec le vocabulaire du métier.</div>';
   if (h.reformulation && h.expr < 3) html += '<div class="modele">Formulation possible : « ' + escapeHtml(h.reformulation) + " »</div>";
   return html + "</div>";
 }
@@ -561,6 +566,12 @@ function bulleProf(h, index) {
 }
 function rendreEtape() {
   let html = "";
+  if (etape > 1) {
+    const accroche = historique.find(h => h.etape === 1 && h.role === "assistant");
+    if (accroche) {
+      html += '<details class="rappel"' + (etape === 2 ? " open" : "") + '><summary>Rappel de la situation</summary><p>' + escapeHtml(accroche.content) + "</p></details>";
+    }
+  }
   historique.forEach((h, i) => {
     if (h.etape !== etape || h.content === MARQUEUR) return;
     html += h.role === "assistant" ? bulleProf(h, i) : '<div class="replique-eleve">' + escapeHtml(h.content) + "</div>";

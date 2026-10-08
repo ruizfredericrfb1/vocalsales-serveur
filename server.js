@@ -800,7 +800,7 @@ function extractJson(text) {
   return null;
 }
 
-async function callClaude(messages, maxTokens, system) {
+async function callClaude(messages, maxTokens, system, prefill) {
   if (!ANTHROPIC_API_KEY) {
     const err = new Error("no_api_key");
     err.code = "no_api_key";
@@ -813,7 +813,10 @@ async function callClaude(messages, maxTokens, system) {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify(system ? { model: MODEL, max_tokens: maxTokens, system, messages } : { model: MODEL, max_tokens: maxTokens, messages })
+    body: JSON.stringify((() => {
+      const msgs = prefill ? [...messages, { role: "assistant", content: prefill }] : messages;
+      return system ? { model: MODEL, max_tokens: maxTokens, system, messages: msgs } : { model: MODEL, max_tokens: maxTokens, messages: msgs };
+    })())
   });
   if (!r.ok) {
     const text = await r.text().catch(() => "");
@@ -825,23 +828,36 @@ async function callClaude(messages, maxTokens, system) {
   }
   const data = await r.json();
   const block = (data.content || []).find(b => b.type === "text");
-  return block ? block.text : "";
+  const texte = block ? block.text : "";
+  return prefill ? prefill + texte : texte;
 }
 
-async function callClaudeJSON(messages, maxTokens, system) {
-  return await callClaude(messages, maxTokens, system);
+async function callClaudeJSON(messages, maxTokens, system, prefill) {
+  return await callClaude(messages, maxTokens, system, prefill);
+}
+
+// Récupère le texte du champ "replique" même si le JSON est coupé ou mal fermé
+function repliqueDepuisTexte(text) {
+  const m = String(text || "").match(/"replique"\s*:\s*"((?:[^"\\]|\\[\s\S])*)/);
+  if (!m) return "";
+  try { return JSON.parse('"' + m[1] + '"'); } catch { return m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim(); }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function getValidReply(messages, maxTokens, attempts = 3, system) {
+async function getValidReply(messages, maxTokens, attempts = 3, system, opts) {
+  const accepte = (opts && opts.accepte) || (p => p && p.replique);
+  const texteLibre = Boolean(opts && opts.texteLibre);
   let lastErr = null;
+  let premierTexte = "";
   for (let i = 0; i < attempts; i++) {
     try {
-      const text = await callClaudeJSON(messages, maxTokens, system);
+      // dès la 2e tentative, on force le début de la réponse par « { » pour obtenir du JSON
+      const text = await callClaudeJSON(messages, maxTokens, system, i > 0 ? "{" : undefined);
       const parsed = extractJson(text);
-      if (parsed && parsed.replique) return parsed;
+      if (parsed && accepte(parsed)) return parsed;
       lastErr = { code: "reponse_invalide", raw: text };
+      if (i === 0 && text) premierTexte = text;
     } catch (e) {
       lastErr = e;
       if (e.code === "no_api_key") throw e;
@@ -850,7 +866,14 @@ async function getValidReply(messages, maxTokens, attempts = 3, system) {
   }
   console.error("Échec après plusieurs tentatives:", lastErr);
 
-  const raw = lastErr && typeof lastErr.raw === "string" ? lastErr.raw.trim() : "";
+  const raw = (premierTexte || (lastErr && typeof lastErr.raw === "string" ? lastErr.raw : "")).trim();
+  if (texteLibre && raw) {
+    // le modèle a répondu en texte simple ou en JSON abîmé : on garde le texte plutôt que de bloquer l'élève
+    const extrait = repliqueDepuisTexte(raw);
+    if (extrait) return { replique: extrait, etat: "en_cours" };
+    const propre = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    if (propre && !propre.startsWith("{") && propre.length < 2500) return { replique: propre, etat: "en_cours" };
+  }
   const looksUsable = raw.length > 0 && raw.length < 600 && !raw.startsWith("{") && !/^\s*<|^\s*```/.test(raw);
   if (looksUsable) return { replique: raw, etat: "en_cours" };
 
@@ -1144,18 +1167,18 @@ Sinon : etat "en_cours" avec la question suivante.`,
 
     3: `
 ÉTAPE 3 SUR 7 : L'ESSENTIEL
-But : donner la notion de façon claire, en s'appuyant sur ce que l'élève vient de trouver.
+But : donner la notion de façon claire, structurée et facile à relire.
 
-Tu dois, en UN SEUL message (environ 120 mots maximum) :
-1. Dire la notion en 3 phrases claires et précises (appuie-toi sur la notion et la phrase à retenir du cours, en les reformulant simplement).
-2. Donner DEUX exemples concrets, dans deux secteurs différents, différents de celui de l'accroche (si possible des exemples d'actualité).
-3. Citer les mots-clés importants du cours en les expliquant chacun en quelques mots.
-4. Si l'élève a dit quelque chose d'utile à l'étape 2, rattache une idée à sa réponse (« comme tu l'as dit... »). S'il n'a presque rien dit, n'invente rien et saute ce point.
-Si une ou deux erreurs classiques de la liste sont apparues avant, signale-les gentiment.
+FORMAT DE RÉPONSE POUR CETTE ÉTAPE UNIQUEMENT (il remplace le format habituel ; ne mets PAS de champ "replique") :
+{"introduction": "...", "notion": ["...", "...", "..."], "exemples": [{"secteur": "...", "texte": "..."}, {"secteur": "...", "texte": "..."}], "mots_cles": [{"terme": "...", "definition": "..."}]}
 
-Condition de sortie : ce message unique suffit.
-- Pas de question à la fin. Termine par « Retiens bien ces points : nous allons maintenant vérifier ta compréhension. ».
-- etat : "etape_suivante" dès ce premier message.`,
+Contenu attendu :
+- "introduction" : une ou deux phrases qui réagissent à ce que l'élève a dit à l'étape 2 (« Comme tu l'as expliqué, … ») et annoncent la synthèse. S'il a presque rien dit, une phrase d'annonce neutre. N'invente rien.
+- "notion" : exactement 3 phrases courtes, claires et précises (une idée par phrase), qui reformulent la notion et la phrase à retenir du cours. Chaque phrase fait 25 mots au maximum.
+- "exemples" : exactement 2 exemples concrets, dans deux secteurs différents, différents de celui de l'accroche. "secteur" : 1 à 3 mots (ex. « Prêt-à-porter »). "texte" : 2 phrases au maximum, qui montrent la notion en action.
+- "mots_cles" : les mots-clés du cours (au maximum 6), chacun avec une définition de 15 mots au maximum.
+- Si une erreur classique est apparue à l'étape 2, ajoute-la brièvement à la fin de l'introduction. Sinon n'en parle pas.
+- Aucun markdown, aucun astérisque, aucune balise. Français soigné, sans expression familière.`,
 
     4: `
 ÉTAPE 4 SUR 7 : DIALOGUE LIBRE
@@ -1306,7 +1329,25 @@ function listeTextes(v) {
   return (Array.isArray(v) ? v : []).map(x => String(x || "").trim()).filter(Boolean).slice(0, 3);
 }
 
+function essentielDepuis(p) {
+  const t = (v, n) => String(v || "").replace(/[*_`#]/g, "").trim().slice(0, n);
+  const notion = (Array.isArray(p.notion) ? p.notion : []).map(x => t(x, 300)).filter(Boolean).slice(0, 4);
+  const exemples = (Array.isArray(p.exemples) ? p.exemples : []).map(x => ({ secteur: t(x && x.secteur, 40), texte: t(x && x.texte, 400) })).filter(x => x.texte).slice(0, 3);
+  const mots = (Array.isArray(p.mots_cles) ? p.mots_cles : []).map(x => ({ terme: t(x && x.terme, 60), definition: t(x && x.definition, 200) })).filter(x => x.terme).slice(0, 8);
+  return { introduction: t(p.introduction, 500), notion, exemples, mots_cles: mots };
+}
+
 function normaliserReponseCours(p, etape, opts) {
+  if (etape === 3 && Array.isArray(p.notion)) {
+    const ess = essentielDepuis(p);
+    const lignes = [];
+    if (ess.introduction) lignes.push(ess.introduction);
+    if (ess.notion.length) lignes.push(ess.notion.join(" "));
+    ess.exemples.forEach((e, i) => lignes.push(`Exemple ${i + 1}${e.secteur ? " (" + e.secteur + ")" : ""} : ${e.texte}`));
+    if (ess.mots_cles.length) lignes.push("Les mots-clés à retenir : " + ess.mots_cles.map(m => m.definition ? `${m.terme} (${m.definition})` : m.terme).join(" ; ") + ".");
+    lignes.push("Retiens bien ces points : nous allons maintenant vérifier ta compréhension.");
+    return { replique: lignes.join("\n\n"), etat: "etape_suivante", essentiel: ess };
+  }
   const out = { replique: String(p.replique || "").trim() };
   const etat = sansAccent(p.etat);
   if (etape === 7) {
@@ -1491,17 +1532,20 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
       : `Expression moyenne : ${String(stats.arrondiExpression).replace(".", ",")} sur 3 (sur ${stats.nbExpression} réponse(s) évaluée(s)).` };
   }
   const systeme = PROF_IA_RULES_V2(cours, etape, niveau, nb, opts);
-  const maxTokens = etape === 7 ? 1300 : 700;
+  const maxTokens = etape === 7 ? 1300 : etape === 3 ? 1000 : 700;
+  const optsLecture = etape === 3
+    ? { texteLibre: true, accepte: p => p && Array.isArray(p.notion) && p.notion.length > 0 }
+    : { texteLibre: etape !== 7 };
 
   try {
-    let parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme), etape, opts);
+    let parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme, optsLecture), etape, opts);
 
     // Filtre : expression familière interdite -> une seconde rédaction est demandée
     const fautif = expressionInterdite(parsed.replique);
     if (fautif) {
       try {
         const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente contenait l'expression familière « ${fautif} ». Réécris ta réponse dans un français soigné, sans cette expression ni aucune autre expression familière.`;
-        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction), etape, opts);
+        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
         if (!expressionInterdite(seconde.replique)) parsed = seconde;
       } catch (e) { /* on garde la première rédaction */ }
     }
@@ -1511,7 +1555,7 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
     if (parsed.etat === "en_cours" && sortieAtteinte(etape, nb)) {
       try {
         const rappel = systeme + "\n\nRAPPEL IMPORTANT : cette étape est terminée. Réponds avec etat \"etape_suivante\", une réaction courte à la dernière réponse de l'élève et une phrase de transition. AUCUNE question.";
-        parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, rappel), etape, opts);
+        parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, rappel, optsLecture), etape, opts);
       } catch (e) { /* on garde la première réponse */ }
       if (parsed.etat === "en_cours") parsed.etat = "etape_suivante";
     }
@@ -1551,7 +1595,7 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
 
     res.json(parsed);
   } catch (e) {
-    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "" });
+    res.status(e.code === "no_api_key" ? 503 : 502).json({ error: e.code || "erreur", detail: e.detail || "", message: "Le prof n'a pas réussi à formuler sa réponse. Réessaie dans un instant : ta réponse est conservée." });
   }
 });
 

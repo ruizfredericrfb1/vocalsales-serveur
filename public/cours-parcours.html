@@ -69,6 +69,23 @@
     background: var(--client2); border-left: 4px solid var(--accent2);
     border-radius: 8px; padding: 14px 16px; font-size: 1.02rem; line-height: 1.5;
   }
+  .replique-essentiel { background: var(--card); border: 2px solid var(--accent); border-left-width: 2px; padding: 16px; }
+  .essentiel { display: grid; gap: 12px; }
+  .ess-titre { font-family: "Poppins", sans-serif; font-weight: 800; font-size: 1.2rem; color: var(--accent); border-bottom: 3px solid var(--accent); padding-bottom: 6px; }
+  .ess-intro { margin: 0; line-height: 1.6; }
+  .ess-sous { font-family: "Poppins", sans-serif; font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; color: var(--accent2); text-decoration: underline; text-underline-offset: 4px; margin-top: 4px; }
+  .ess-notion { list-style: none; counter-reset: n; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ess-notion li { counter-increment: n; position: relative; background: var(--bg); border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px 10px 48px; line-height: 1.55; font-weight: 600; }
+  .ess-notion li::before { content: counter(n); position: absolute; left: 10px; top: 9px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .ess-exemples { display: grid; gap: 8px; }
+  .ess-ex { background: var(--client2); border-left: 4px solid var(--accent2); border-radius: 8px; padding: 10px 12px; }
+  .ess-ex p { margin: 4px 0 0; line-height: 1.55; }
+  .ess-ex-t { font-weight: 800; color: var(--accent2); }
+  .ess-ex-t span { font-weight: 600; color: var(--ink); }
+  .ess-mots { margin: 0; display: grid; gap: 4px; }
+  .ess-mots dt { display: inline-block; justify-self: start; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 12px; font-weight: 700; font-size: .9rem; margin-top: 6px; }
+  .ess-mots dd { margin: 0 0 2px 4px; line-height: 1.5; }
+  .ess-fin { margin: 0; font-weight: 700; color: var(--accent); }
   .replique-ia p { margin: 0 0 8px; }
   .replique-ia p:last-of-type { margin-bottom: 0; }
   .replique-eleve {
@@ -407,7 +424,8 @@ function post(path, body) {
 function messageErreur(e) {
   if (e && e.code === "quota_depasse") return "Tu as utilisé tout ton temps du mois. Réessaie le mois prochain.";
   if (e && e.message && e.message !== "Erreur" && e.message !== "Failed to fetch") return e.message;
-  return "Un problème de connexion est survenu. Réessaie dans un instant.";
+  if (e && e.code) return "Le prof n'a pas réussi à formuler sa réponse. Réessaie dans un instant : ta réponse est conservée.";
+  return "Un problème de connexion est survenu. Vérifie ta connexion internet et réessaie.";
 }
 function cleSauvegarde() { return "vocalsales_parcours_" + coursCode + "_" + studentCode; }
 function sauver() {
@@ -593,7 +611,30 @@ function blocEffort(h) {
   if (h.reformulation && h.expr < 3) html += '<div class="modele">Formulation possible : « ' + escapeHtml(h.reformulation) + " »</div>";
   return html + "</div>";
 }
+function blocEssentiel(e) {
+  let html = '<div class="essentiel"><div class="ess-titre">📌 L\'essentiel à retenir</div>';
+  if (e.introduction) html += '<p class="ess-intro">' + escapeHtml(e.introduction) + "</p>";
+  if (e.notion && e.notion.length) {
+    html += '<div class="ess-sous">La notion en 3 points</div><ol class="ess-notion">' +
+      e.notion.map(n => "<li>" + escapeHtml(n) + "</li>").join("") + "</ol>";
+  }
+  if (e.exemples && e.exemples.length) {
+    html += '<div class="ess-sous">Deux exemples concrets</div><div class="ess-exemples">' +
+      e.exemples.map((x, i) => '<div class="ess-ex"><div class="ess-ex-t">Exemple ' + (i + 1) +
+        (x.secteur ? ' <span>· ' + escapeHtml(x.secteur) + "</span>" : "") + "</div><p>" + escapeHtml(x.texte) + "</p></div>").join("") + "</div>";
+  }
+  if (e.mots_cles && e.mots_cles.length) {
+    html += '<div class="ess-sous">Les mots-clés</div><dl class="ess-mots">' +
+      e.mots_cles.map(m => "<dt>" + escapeHtml(m.terme) + "</dt>" + (m.definition ? "<dd>" + escapeHtml(m.definition) + "</dd>" : "")).join("") + "</dl>";
+  }
+  return html + '<p class="ess-fin">Retiens bien ces points : nous allons maintenant vérifier ta compréhension.</p></div>';
+}
 function bulleProf(h, index) {
+  if (h.essentiel && h.essentiel.notion && h.essentiel.notion.length) {
+    return '<div class="replique-ia replique-essentiel">' + blocEssentiel(h.essentiel) +
+      '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
+      '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
+  }
   const paragraphes = String(h.content).split(/\n+/).filter(Boolean).map(p => "<p>" + escapeHtml(p) + "</p>").join("");
   return '<div class="replique-ia">' + paragraphes + blocEffort(h) +
     '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
@@ -659,7 +700,7 @@ async function demarrerEtape(n) {
 function traiterReponse(res) {
   if (res.contexte) contexte = res.contexte;
   historique.push({
-    role: "assistant", content: res.replique, etape,
+    role: "assistant", content: res.replique, etape, essentiel: res.essentiel || undefined,
     expr: res.expression, ortho: res.orthographe || undefined, reformulation: res.reformulation || ""
   });
   if (etape === 7) {

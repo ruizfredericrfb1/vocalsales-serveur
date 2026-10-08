@@ -1124,7 +1124,7 @@ Condition de sortie : DÈS que l'élève a envoyé sa première réponse, même 
 ÉTAPE 2 SUR 7 : OBSERVATION GUIDÉE
 But : faire découvrir la notion par l'élève lui-même, grâce à 3 questions maximum sur la situation de l'accroche (relis-la dans l'historique).
 
-- Commence par rappeler la situation de l'accroche en UNE phrase très courte (même personnage, même magasin), sans la répéter en entier. N'invente JAMAIS une nouvelle situation.
+- La situation de départ reste affichée à l'écran au-dessus de ta réplique : ne la recopie JAMAIS et ne la raconte pas à nouveau. Fais-y référence en une courte phrase (quinze mots au maximum, par exemple « Revenons à la situation de Maxime. »). N'invente JAMAIS une nouvelle situation.
 - Pose les questions UNE par UNE, de la plus simple à la plus profonde.
 - Question 1 : que voit-on dans la situation ? Question 2 : quel est le problème ou l'information qui manque ? Question 3 : comment le résoudre ou qu'est-ce qui rend la solution bonne ?
 - Après chaque réponse de l'élève : une courte réaction (une phrase), puis la question suivante. Ne donne jamais la définition à cette étape.
@@ -1346,6 +1346,42 @@ function statistiquesForme(hist) {
   };
 }
 
+async function evaluerFormulation({ question, reponse, niveau, ortho }) {
+  const exigence = {
+    decouverte: "une phrase simple et compréhensible suffit pour obtenir 3.",
+    entrainement: "une phrase complète contenant au moins un terme du cours est attendue pour obtenir 3.",
+    maitrise: "une réponse rédigée, structurée et justifiée, avec le vocabulaire professionnel, est attendue pour obtenir 3."
+  }[sansAccent(niveau)] || "une phrase complète et correcte est attendue pour obtenir 3.";
+  const prompt = `Tu évalues UNIQUEMENT la formulation écrite d'une réponse d'élève de Bac Pro Métiers du Commerce et de la Vente. Tu n'évalues pas l'exactitude du fond.
+
+Question ou consigne posée à l'élève : ${String(question || "").slice(0, 1200)}
+Réponse de l'élève : ${String(reponse || "").slice(0, 1500)}
+
+Barème de l'expression :
+1 = un mot, un groupe de mots ou un fragment, sans phrase construite.
+2 = une phrase, mais incomplète, imprécise, sans le vocabulaire professionnel attendu ou sans justification alors que la question en demande une.
+3 = une ou plusieurs phrases complètes et correctes, avec le vocabulaire professionnel adapté et, si la question le demande, une justification.
+Exigence selon le niveau choisi par l'élève : ${exigence}
+
+Barème de l'orthographe : ${ortho ? "3 = très peu d'erreurs ou aucune ; 2 = quelques erreurs ; 1 = erreurs nombreuses qui gênent la lecture. Ne juge que l'orthographe et la grammaire." : "ne pas évaluer : mets null."}
+
+Reformulation : si l'expression vaut 1 ou 2, écris UNE phrase modèle, correcte et bien construite, qui reprend fidèlement l'idée de l'élève avec le vocabulaire du cours. Si l'idée de l'élève est fausse ou hors sujet, laisse une chaîne vide. Si l'expression vaut 3, laisse une chaîne vide.
+
+Réponds UNIQUEMENT par un objet JSON valide, sans texte autour :
+{"expression": 1, "orthographe": ${ortho ? "3" : "null"}, "reformulation": ""}`;
+  const texte = await callClaude([{ role: "user", content: prompt }], 300);
+  const p = extractJson(texte);
+  if (!p) return null;
+  const ex = parseInt(p.expression, 10);
+  if (!(ex >= 1 && ex <= 3)) return null;
+  const or = parseInt(p.orthographe, 10);
+  return {
+    expression: ex,
+    orthographe: ortho && or >= 1 && or <= 3 ? or : null,
+    reformulation: ex < 3 ? String(p.reformulation || "").trim().slice(0, 400) : ""
+  };
+}
+
 function trouverCours(code) {
   return loadCoursCatalogue().find(c => c.code === code) || null;
 }
@@ -1393,7 +1429,12 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
   if (messages[0].role !== "user") messages.unshift({ role: "user", content: MARQUEUR_DEBUT });
 
   const saisie = ["clavier", "micro", "bouton"].includes(req.body.saisie) ? req.body.saisie : "clavier";
-  const opts = { forme: Boolean(message) && saisie !== "bouton" && etape !== 3 && etape !== 7, ortho: saisie === "clavier" };
+  const evaluer = Boolean(message) && saisie !== "bouton" && etape !== 3 && etape !== 7;
+  const opts = { forme: false, ortho: saisie === "clavier" };
+  const derniereQuestion = [...hist].reverse().find(h => h.role === "assistant");
+  const evaluation = evaluer
+    ? evaluerFormulation({ question: derniereQuestion ? derniereQuestion.content : "", reponse: message, niveau, ortho: saisie === "clavier" }).catch(() => null)
+    : Promise.resolve(null);
   const stats = etape === 7 ? statistiquesForme(hist) : null;
   if (stats) {
     opts.stats = { resume: stats.expression === null
@@ -1414,6 +1455,9 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
       } catch (e) { /* on garde la première réponse */ }
       if (parsed.etat === "en_cours") parsed.etat = "etape_suivante";
     }
+
+    const ev = await evaluation;
+    if (ev) Object.assign(parsed, ev);
 
     consumeQuota(req.studentCode, COST_TURN);
 

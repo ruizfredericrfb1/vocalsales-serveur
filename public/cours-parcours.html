@@ -111,6 +111,23 @@
   .voix-reglage label { font-weight: 400; display: inline-flex; align-items: center; gap: 6px; }
   .voix-reglage select { font: inherit; padding: 4px 8px; border-radius: 8px; border: 2px solid var(--line); background: var(--card); color: var(--ink); }
 
+  .mode-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mode-btn {
+    text-align: left; background: var(--card); color: var(--ink);
+    border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    cursor: pointer; font: inherit; font-weight: 400;
+  }
+  .mode-btn strong { display: block; font-weight: 800; margin-bottom: 3px; }
+  .mode-btn span { color: var(--muted); font-size: .85rem; }
+  .mode-btn.actif { border-color: var(--accent); background: var(--warnbg); }
+  @media (max-width: 460px) { .mode-choix { grid-template-columns: 1fr; } }
+  .mode-ecrit .reecouter, .mode-ecrit #micZone, .mode-ecrit #voixGenre { display: none !important; }
+  .effort { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--accent2); font-size: .92rem; display: grid; gap: 6px; }
+  .effort .lignes { display: flex; gap: 16px; flex-wrap: wrap; }
+  .effort .etoiles { color: var(--accent2); letter-spacing: 2px; font-size: 1.05rem; }
+  .effort .modele { font-style: italic; }
+  .forme-bilan { display: grid; gap: 6px; background: var(--card); border: 2px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  .forme-bilan .etoiles { color: var(--accent2); letter-spacing: 2px; font-size: 1.1rem; }
   .status { min-height: 1.4em; font-weight: 700; color: var(--muted); }
   .status.err { color: var(--ko); }
 
@@ -195,7 +212,18 @@
       </div>
     </div>
     <div class="step-label">Avant de commencer</div>
-    <h2>Choisis ton niveau</h2>
+    <h2>Comment veux-tu travailler ?</h2>
+    <div class="mode-choix" role="radiogroup" aria-label="Mode de travail">
+      <button type="button" class="mode-btn" data-mode="ecrit" role="radio">
+        <strong>Écrit seul</strong>
+        <span>Le texte uniquement, sans voix ni micro.</span>
+      </button>
+      <button type="button" class="mode-btn" data-mode="audio" role="radio">
+        <strong>Écrit + audio</strong>
+        <span>Le même texte, avec la voix du prof et le micro.</span>
+      </button>
+    </div>
+    <h2 style="margin-top:8px;">Choisis ton niveau</h2>
     <p class="tagline" style="margin:0;">Tu pourras changer en recommençant le cours.</p>
     <div class="niveau-choix">
       <button class="niveau-btn" data-niveau="decouverte">
@@ -219,11 +247,11 @@
       <div class="card-head">
         <div class="step-label" id="etapeLabel">Étape</div>
         <div class="voix-reglage">
-          <label><input type="checkbox" id="voixAuto" checked> Voix du prof</label>
           <select id="voixGenre" aria-label="Choix de la voix">
             <option value="male">Voix d'homme</option>
             <option value="female">Voix de femme</option>
           </select>
+          <button type="button" class="secondary petit" id="modeBtn"></button>
         </div>
       </div>
       <div class="fil" id="zoneContenu"></div>
@@ -259,6 +287,7 @@
       <div class="step-label">Étape 7 · Bilan</div>
       <p class="niveau-gros" id="bilanNiveau"></p>
       <div class="jauge" id="bilanJauge"></div>
+      <div id="bilanForme"></div>
       <div id="bilanContenu" class="fil"></div>
       <div id="bilanAudio"></div>
     </div>
@@ -302,6 +331,8 @@ let attenteContinuer = false;
 let termine = false;
 let dernierBilan = null;
 let busy = false;
+let mode = "audio";   // "audio" (écrit + audio) ou "ecrit" (écrit seul)
+let aDicte = false;
 
 const ETAPES = [
   { label: "Situation", num: 1 },
@@ -365,11 +396,11 @@ function debloquerAudio() {
   try { player.src = SILENCE; const p = player.play(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* rien */ }
 }
 function arreterVoix() { voixId++; try { player.pause(); } catch (e) { /* rien */ } }
-function voixActive() { return $("voixAuto").checked; }
+function voixActive() { return mode === "audio"; }
 
 async function parler(texte, auto) {
   if (!texte) return;
-  if (auto && !voixActive()) return;
+  if (!voixActive()) return;
   arreterVoix();
   const monId = voixId;
   const genre = $("voixGenre").value;
@@ -393,15 +424,27 @@ async function parler(texte, auto) {
   }
 }
 
-$("voixAuto").addEventListener("change", () => {
-  try { localStorage.setItem("vocalsales_voix_auto", $("voixAuto").checked ? "1" : "0"); } catch (e) { /* rien */ }
-  if (!$("voixAuto").checked) arreterVoix();
-});
+function appliquerMode(m) {
+  mode = m === "ecrit" ? "ecrit" : "audio";
+  document.body.classList.toggle("mode-ecrit", mode === "ecrit");
+  try { localStorage.setItem("vocalsales_mode", mode); } catch (e) { /* rien */ }
+  document.querySelectorAll(".mode-btn").forEach(b => {
+    const actif = b.dataset.mode === mode;
+    b.classList.toggle("actif", actif);
+    b.setAttribute("aria-checked", actif ? "true" : "false");
+  });
+  $("modeBtn").textContent = mode === "audio" ? "Passer en écrit seul" : "Passer en écrit + audio";
+  if (mode === "ecrit") {
+    arreterVoix();
+    if (typeof enEcoute !== "undefined" && enEcoute && rec) { enEcoute = false; try { rec.stop(); } catch (e) { /* rien */ } }
+  }
+}
+document.querySelectorAll(".mode-btn").forEach(b => b.addEventListener("click", () => appliquerMode(b.dataset.mode)));
+$("modeBtn").addEventListener("click", () => appliquerMode(mode === "audio" ? "ecrit" : "audio"));
 $("voixGenre").addEventListener("change", () => {
   try { localStorage.setItem("vocalsales_voix_genre", $("voixGenre").value); } catch (e) { /* rien */ }
 });
 try {
-  if (localStorage.getItem("vocalsales_voix_auto") === "0") $("voixAuto").checked = false;
   const g = localStorage.getItem("vocalsales_voix_genre");
   if (g === "male" || g === "female") $("voixGenre").value = g;
 } catch (e) { /* rien */ }
@@ -446,7 +489,7 @@ if (!SR) {
     arreterVoix();
     afficherStatut("", false);
     baseTexte = $("reponseInput").value.trim(); finals = ""; sessionFinal = "";
-    enEcoute = true;
+    enEcoute = true; aDicte = true;
     $("micBtn").classList.add("ecoute");
     $("micBtn").textContent = "🎙️ Je t'écoute… relâche pour finir";
     try { rec.start(); } catch (e) { /* rien */ }
@@ -498,16 +541,29 @@ function moi(mode) {
   if (mode === "continuer") $("statusContinuer").textContent = "Lis bien le message du prof, puis clique sur Continuer quand tu es prêt.";
   majBoutonEnvoyer();
 }
-function bulleProf(texte, index) {
-  const paragraphes = String(texte).split(/\n+/).filter(Boolean).map(p => "<p>" + escapeHtml(p) + "</p>").join("");
-  return '<div class="replique-ia">' + paragraphes +
+function etoiles(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
+function blocEffort(h) {
+  if (!h.expr) return "";
+  const libelleExpr = ["", "à renforcer", "correcte", "solide"][h.expr];
+  let lignes = '<span>Expression : <span class="etoiles" role="img" aria-label="Expression : ' + h.expr + ' sur 3">' + etoiles(h.expr) + "</span> " + libelleExpr + "</span>";
+  if (h.ortho) {
+    const libelleOrtho = ["", "à surveiller", "correcte", "soignée"][h.ortho];
+    lignes += '<span>Orthographe : <span class="etoiles" role="img" aria-label="Orthographe : ' + h.ortho + ' sur 3">' + etoiles(h.ortho) + "</span> " + libelleOrtho + "</span>";
+  }
+  let html = '<div class="effort"><div class="lignes">' + lignes + "</div>";
+  if (h.reformulation && h.expr < 3) html += '<div class="modele">Formulation possible : « ' + escapeHtml(h.reformulation) + " »</div>";
+  return html + "</div>";
+}
+function bulleProf(h, index) {
+  const paragraphes = String(h.content).split(/\n+/).filter(Boolean).map(p => "<p>" + escapeHtml(p) + "</p>").join("");
+  return '<div class="replique-ia">' + paragraphes + blocEffort(h) +
     '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button></div>';
 }
 function rendreEtape() {
   let html = "";
   historique.forEach((h, i) => {
     if (h.etape !== etape || h.content === MARQUEUR) return;
-    html += h.role === "assistant" ? bulleProf(h.content, i) : '<div class="replique-eleve">' + escapeHtml(h.content) + "</div>";
+    html += h.role === "assistant" ? bulleProf(h, i) : '<div class="replique-eleve">' + escapeHtml(h.content) + "</div>";
   });
   $("zoneContenu").innerHTML = html;
 }
@@ -529,7 +585,7 @@ $("zoneContenu").addEventListener("click", (ev) => {
 
 /* ---------- Déroulement du cours ---------- */
 function histPourServeur() {
-  return historique.map(h => ({ role: h.role, content: h.content, etape: h.etape }));
+  return historique.map(h => ({ role: h.role, content: h.content, etape: h.etape, expr: h.expr, ortho: h.ortho }));
 }
 
 async function demarrerEtape(n) {
@@ -553,7 +609,10 @@ async function demarrerEtape(n) {
 }
 
 function traiterReponse(res) {
-  historique.push({ role: "assistant", content: res.replique, etape });
+  historique.push({
+    role: "assistant", content: res.replique, etape,
+    expr: res.expression, ortho: res.orthographe || undefined, reformulation: res.reformulation || ""
+  });
   if (etape === 7) {
     termine = true; dernierBilan = res; sauver();
     afficherBilan(res);
@@ -568,7 +627,7 @@ function traiterReponse(res) {
   if (derniere) derniere.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-async function envoyerReponse(texte) {
+async function envoyerReponse(texte, saisieForcee) {
   if (busy) return;
   texte = String(texte || "").trim();
   if (texte.length < 2) return;
@@ -580,8 +639,10 @@ async function envoyerReponse(texte) {
   $("zoneContenu").appendChild(bulle);
   ajouterChargement();
   try {
-    const res = await post("/api/cours/turn", { cours_code: coursCode, etape, niveau, historique: histPourServeur(), message: texte });
+    const saisie = saisieForcee || (aDicte ? "micro" : "clavier");
+    const res = await post("/api/cours/turn", { cours_code: coursCode, etape, niveau, historique: histPourServeur(), message: texte, saisie });
     historique.push({ role: "user", content: texte, etape });
+    aDicte = false;
     $("reponseInput").value = "";
     busy = false; retirerChargement();
     traiterReponse(res);
@@ -594,7 +655,7 @@ async function envoyerReponse(texte) {
 }
 
 $("envoyerBtn").addEventListener("click", () => envoyerReponse($("reponseInput").value));
-$("passerBtn").addEventListener("click", () => envoyerReponse("Je n'ai pas de question, j'ai tout compris."));
+$("passerBtn").addEventListener("click", () => envoyerReponse("Je n'ai pas de question, j'ai tout compris.", "bouton"));
 $("reponseInput").addEventListener("input", majBoutonEnvoyer);
 $("continuerBtn").addEventListener("click", () => {
   arreterVoix();
@@ -610,6 +671,19 @@ function afficherBilan(res) {
   $("bilanNiveau").textContent = niv ? "Ton niveau : " + niv : "Ton bilan";
   const idx = niv ? NIVEAUX_BILAN.indexOf(niv) : -1;
   $("bilanJauge").innerHTML = NIVEAUX_BILAN.map((n, i) => '<div class="' + (i <= idx ? "atteint" : "") + '">' + n + "</div>").join("");
+  const f = res.expression, o = res.orthographe;
+  let forme = "";
+  if (f && f.moyenne !== null && f.moyenne !== undefined) {
+    const n = Math.max(1, Math.min(3, Math.round(f.moyenne)));
+    forme += '<div class="forme-bilan"><h3>Ton expression écrite</h3><div>Formulation des réponses : <span class="etoiles" role="img" aria-label="' + n + ' sur 3">' + etoiles(n) + "</span> " + escapeHtml(f.label || "") + "</div>";
+    if (o && o.moyenne !== null && o.moyenne !== undefined) {
+      const m = Math.max(1, Math.min(3, Math.round(o.moyenne)));
+      forme += '<div>Orthographe (réponses tapées au clavier) : <span class="etoiles" role="img" aria-label="' + m + ' sur 3">' + etoiles(m) + "</span> " + escapeHtml(o.label || "") + "</div>";
+    }
+    if (res.plafonne_expression) forme += "<div>Tes connaissances sont proches du niveau Expert. Pour l'atteindre, rédige tes réponses en phrases complètes, avec le vocabulaire du métier.</div>";
+    forme += "</div>";
+  }
+  $("bilanForme").innerHTML = forme;
   const liste = (arr) => "<ul>" + arr.map(x => "<li>" + escapeHtml(x) + "</li>").join("") + "</ul>";
   let html = "";
   if (res.points_forts && res.points_forts.length) html += '<div class="bloc-bilan fort"><h3>Tes points forts</h3>' + liste(res.points_forts) + "</div>";
@@ -617,7 +691,7 @@ function afficherBilan(res) {
   if (res.conseil) html += '<div class="bloc-bilan conseil"><h3>Conseil pour la prochaine fois</h3><p style="margin:0;">' + escapeHtml(res.conseil) + "</p></div>";
   if (!html) html = '<div class="replique-ia">' + escapeHtml(res.replique || "") + "</div>";
   $("bilanContenu").innerHTML = html;
-  $("bilanAudio").innerHTML = '<button type="button" class="secondary" id="bilanReecouter">🔊 Réécouter le bilan</button>';
+  $("bilanAudio").innerHTML = '<button type="button" class="secondary reecouter" id="bilanReecouter">🔊 Réécouter le bilan</button>';
   $("bilanReecouter").addEventListener("click", () => parler(res.replique, false));
   parler(res.replique, true);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -641,6 +715,10 @@ async function ouvrirFiche() {
     if (f.schema && f.schema.length) {
       h += "<h3>Le mini-schéma</h3><div class=\"schema\">" +
         f.schema.map((s, i) => '<div class="sch-box">' + escapeHtml(s) + "</div>" + (i < f.schema.length - 1 ? '<div class="sch-fl">→</div>' : "")).join("") + "</div>";
+    }
+    if (dernierBilan && dernierBilan.expression && dernierBilan.expression.moyenne) {
+      const n = Math.max(1, Math.min(3, Math.round(dernierBilan.expression.moyenne)));
+      h += "<h3>Ton expression écrite</h3><p style=\"margin:0;\">Formulation : " + etoiles(n) + " " + escapeHtml(dernierBilan.expression.label || "") + "</p>";
     }
     if (f.essentiel) h += '<div class="retenir">À retenir : ' + escapeHtml(f.essentiel) + "</div>";
     if (dernierBilan && dernierBilan.points_a_travailler && dernierBilan.points_a_travailler.length) {
@@ -710,6 +788,9 @@ $("repriseBtn").addEventListener("click", () => {
 });
 
 async function init() {
+  let modeInitial = "audio";
+  try { if (localStorage.getItem("vocalsales_mode") === "ecrit") modeInitial = "ecrit"; } catch (e) { /* rien */ }
+  appliquerMode(modeInitial);
   if (!coursCode) { location.href = "cours.html"; return; }
   const code = sessionStorage.getItem("vocalsales_code");
   if (!code) { location.href = "cours.html"; return; }

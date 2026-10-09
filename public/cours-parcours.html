@@ -88,6 +88,21 @@
   .ess-fin { margin: 0; font-weight: 700; color: var(--accent); }
   .replique-ia p { margin: 0 0 8px; }
   .replique-ia p:last-of-type { margin-bottom: 0; }
+  .replique-ia { padding: 18px 20px; line-height: 1.7; }
+  .replique-ia .contexte { display: grid; gap: 14px; }
+  .replique-ia .contexte p { margin: 0; }
+  .replique-ia .separe { border: 0; border-top: 2px dashed var(--accent2); opacity: .55; margin: 16px 0 14px; }
+  .replique-ia .question {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: start;
+    background: var(--card); border: 2px solid var(--accent); border-radius: 12px; padding: 12px 14px;
+  }
+  .replique-ia .question .pastille-q {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-family: "Poppins", sans-serif; font-weight: 800;
+  }
+  .replique-ia .question .etiquette { grid-column: 2; font-family: "Poppins", sans-serif; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent2); margin: 0; }
+  .replique-ia .question p { grid-column: 2; margin: 0; font-weight: 700; color: var(--ink); line-height: 1.55; }
+  .replique-ia .question .pastille-q { grid-row: 1 / span 2; }
   .replique-eleve {
     background: var(--accent); color: var(--accent-ink); border-radius: 14px;
     padding: 12px 16px; font-size: 1rem; border-bottom-right-radius: 4px;
@@ -629,13 +644,31 @@ function blocEssentiel(e) {
   }
   return html + '<p class="ess-fin">Retiens bien ces points : nous allons maintenant vérifier ta compréhension.</p></div>';
 }
+// Présentation visuelle seulement : le texte lu à voix haute reste inchangé.
+function structurerReplique(texte) {
+  const brut = String(texte || "").trim().replace(/ ([?!:;»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+  const phrases = brut.split(/\n+/).filter(Boolean).flatMap(par => par.split(/(?<=[.!?…])\s+/)).filter(Boolean);
+  let iq = -1;
+  phrases.forEach((ph, i) => { if (/\?\s*$/.test(ph)) iq = i; });
+  const contexte = iq > 0 ? phrases.slice(0, iq) : (iq === 0 ? [] : phrases);
+  const question = iq >= 0 ? phrases.slice(iq).join(" ") : "";
+  const paragraphes = [];
+  for (let i = 0; i < contexte.length; i += 2) paragraphes.push(contexte.slice(i, i + 2).join(" "));
+  let html = "";
+  if (paragraphes.length) html += '<div class="contexte">' + paragraphes.map(p => "<p>" + escapeHtml(p) + "</p>").join("") + "</div>";
+  if (question) {
+    if (paragraphes.length) html += '<hr class="separe">';
+    html += '<div class="question"><span class="pastille-q" aria-hidden="true">?</span><p class="etiquette">À toi</p><p>' + escapeHtml(question) + "</p></div>";
+  }
+  return html || "<p>" + escapeHtml(brut) + "</p>";
+}
 function bulleProf(h, index) {
   if (h.essentiel && h.essentiel.notion && h.essentiel.notion.length) {
     return '<div class="replique-ia replique-essentiel">' + blocEssentiel(h.essentiel) +
       '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
       '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
   }
-  const paragraphes = String(h.content).split(/\n+/).filter(Boolean).map(p => "<p>" + escapeHtml(p) + "</p>").join("");
+  const paragraphes = structurerReplique(h.content);
   return '<div class="replique-ia">' + paragraphes + blocEffort(h) +
     '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
     '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';

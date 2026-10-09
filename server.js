@@ -875,8 +875,30 @@ function repliqueDepuisTexte(text) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Repère un mot collé à la fin d'une phrase (ex. « suppositionFournisseur Nous ») : minuscule suivie d'une majuscule puis de minuscules.
+const MARQUES_AVEC_MAJUSCULE = new Set(["iPhone", "iPad", "iOS", "iMac", "iPod", "WhatsApp", "PayPal", "YouTube", "LinkedIn", "TikTok", "McDonald", "eBay", "PlayStation", "GitHub", "AirPods", "MacBook", "OnePlus", "SoundCloud", "BlaBlaCar", "BlablaCar", "ChatGPT", "DrimmDrive", "LeBonCoin", "PrestaShop", "WooCommerce", "OpenAI", "ClickAndCollect"]);
+function motColle(texte) {
+  const re = /[a-zàâçéèêëîïôûùüÿœ][A-ZÀÂÇÉÈÊËÎÏÔÛÙÜŸŒ][a-zàâçéèêëîïôûùüÿœ]{3,}/g;
+  const t = String(texte || "");
+  let m;
+  while ((m = re.exec(t))) {
+    // on reprend le mot entier autour de la correspondance
+    let d = m.index; while (d > 0 && /[A-Za-zÀ-ÿ]/.test(t[d - 1])) d--;
+    let f = m.index + m[0].length; while (f < t.length && /[A-Za-zÀ-ÿ]/.test(t[f])) f++;
+    const mot = t.slice(d, f);
+    if (![...MARQUES_AVEC_MAJUSCULE].some(x => mot.startsWith(x) || mot.includes(x))) return true;
+  }
+  return false;
+}
+
 async function getValidReply(messages, maxTokens, attempts = 3, system, opts) {
-  const accepte = (opts && opts.accepte) || (p => p && p.replique);
+  const accepteBrut = (opts && opts.accepte) || (p => p && p.replique);
+  let accepteMaisCollee = null;
+  const accepte = (p) => {
+    if (!accepteBrut(p)) return false;
+    if (motColle(JSON.stringify(p))) { accepteMaisCollee = p; return false; }
+    return true;
+  };
   const texteLibre = Boolean(opts && opts.texteLibre);
   let lastErr = null;
   let premierTexte = "";
@@ -893,6 +915,11 @@ async function getValidReply(messages, maxTokens, attempts = 3, system, opts) {
       if (e.code === "no_api_key") throw e;
     }
     if (i < attempts - 1) await sleep(400);
+  }
+  if (accepteMaisCollee) {
+    // mieux vaut une réponse avec un défaut de forme qu'un blocage de l'élève
+    console.error("Mot collé détecté sur toutes les tentatives, réponse conservée.");
+    return accepteMaisCollee;
   }
   console.error("Échec après plusieurs tentatives:", lastErr);
 
@@ -1087,6 +1114,25 @@ function PROF_IA_RULES_V2(cours, etape, niveau, nbReponses, opts) {
     .replace(/[\u0300-\u036f]/g, '');
   const niv = ['decouverte', 'entrainement', 'maitrise'].includes(nv) ? nv : 'decouverte';
 
+  const complexite = {
+    decouverte: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 1 SUR 3 (repérer)
+- Un seul problème, clair : une seule information manque ou est incertaine, et l'élève peut la repérer facilement.
+- Aucune contradiction entre des sources, aucune contrainte particulière.
+- Ce que l'élève doit faire : repérer le problème et dire quelle information manque.
+- Question attendue, neutre et simple, par exemple « Quelle information manque à [prénom] ? » ou « Que peut faire [prénom] ? ».`,
+    entrainement: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 2 SUR 3 (trier)
+- Deux éléments à démêler : deux informations dont l'une est floue, ou deux sources qui ne disent pas la même chose, ou une information dont l'origine ou la date est incertaine.
+- Une contrainte légère (un client qui attend, un rayon chargé).
+- Ce que l'élève doit faire : trier les informations, dire laquelle est la plus fiable et pourquoi (source, date, utilité), et expliquer sa démarche.
+- Question attendue, neutre, par exemple « Comment [prénom] peut-elle s'y prendre ? » ou « Quelle information [prénom] peut-elle retenir, et sur quoi s'appuie-t-elle ? ».`,
+    maitrise: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 3 SUR 3 (décider et justifier)
+- Trois éléments ou plus, de fiabilité inégale, avec au moins une contradiction (par exemple l'étiquette, le site du fabricant et l'avis d'un collègue qui divergent).
+- Une contrainte forte et un enjeu réel : délai court, client mécontent ou pressé, règle à respecter, enjeu financier ou de sécurité.
+- Ce que l'élève doit faire : choisir une démarche, la justifier, et dire précisément ce qu'il répond au client.
+- Question attendue, neutre mais exigeante, par exemple « Quelle démarche [prénom] choisit-elle, et comment la justifie-t-elle auprès du client ? » ou « Que répond [prénom] au client, et pour quelles raisons ? ».`
+  };
+  const blocComplexite = complexite[niv] || complexite.decouverte;
+
   const motsCles = Array.isArray(c.mots_cles) ? c.mots_cles.join(', ') : '';
   const erreurs = Array.isArray(c.erreurs_classiques)
     ? c.erreurs_classiques.map(x => '- ' + x).join('\n')
@@ -1113,6 +1159,12 @@ RÈGLES D'ÉCRITURE (très important, ta réplique est lue à voix haute)
 - Si l'élève répond à côté, très court, ou « je sais pas » : reste gentil, ne le fais jamais se sentir nul, et avance quand même.
 - Ta réaction doit toujours correspondre au contenu réel de la réponse : félicite ce qui est juste, nuance ce qui est incomplet, rassure seulement si l'élève est perdu.
 - Cite des exemples concrets, réalistes et professionnels (enseignes, marques, outils numériques, situations de vente rencontrées en entreprise ou en stage).
+
+RÈGLES POUR TES QUESTIONS (valables à toutes les étapes)
+- Une question ne contient jamais sa propre réponse. Elle ne suggère ni la piste, ni la conclusion, ni l'ordre des actions (évite par exemple « avant de répondre », « n'est-il pas préférable de vérifier »).
+- Elle ne propose pas de choix qui désigne la bonne réponse (pas d'option évidente à côté d'options absurdes).
+- Elle est ouverte et porte sur ce que l'élève pense ou ferait : « Comment… ? », « Quelle réponse… ? », « Que peut faire… ? », « Qu'est-ce qui pose problème dans cette situation ? ».
+- Les indices viennent après la question, seulement si l'élève bloque, et seulement au niveau Découverte.
 
 CE QUE TU NE FAIS JAMAIS
 - Tu ne parles que du cours en cours. Si l'élève te demande autre chose (autre matière, vie privée, blague, etc.), tu réponds en une phrase que ce n'est pas le sujet et tu reviens au cours.
@@ -1171,9 +1223,9 @@ Si l'élève n'a encore rien répondu dans cette étape :
 - Écris une situation originale qui place un vendeur ou une vendeuse devant un problème d'information : une question du client à laquelle il ou elle ne connaît pas la réponse, ou une information dont la fiabilité est incertaine. Si un type de problème est imposé, la situation doit l'illustrer.
 ${cadreImpose}
 - La situation pose le problème sans donner la leçon : n'annonce JAMAIS les conséquences d'une réponse non vérifiée (pas de « cela risque de… », pas de « perdre la confiance du client ») et ne suggère aucune piste ni aucun lieu où chercher.
-- Exemple de situation réussie, à ne pas recopier : « Inès est vendeuse depuis deux mois dans une animalerie. Une cliente lui demande si une marque de croquettes convient à un chien sensible de l'estomac. Inès n'a pas la composition du produit sous les yeux. Que doit faire Inès avant de répondre à la cliente ? »
-- 3 à 4 phrases maximum. Commence directement par la situation, en nommant le personnage (par exemple « Léa, vendeuse dans un magasin de téléphonie, est interrogée par un client… »), sans salutation et sans « Imagine que ».
-- Termine par UNE question ouverte et neutre, par exemple « Que doit faire [prénom] avant de répondre au client ? », sans « où » ni « comment chercher ».
+${blocComplexite}
+- 3 à 5 phrases maximum (5 au niveau 3). Commence directement par la situation, en nommant le personnage (par exemple « Léa, vendeuse dans un magasin de téléphonie, est interrogée par un client… »), sans salutation et sans « Imagine que ».
+- Termine par UNE question ouverte et neutre, au niveau de complexité indiqué ci-dessus, sans « où » ni « comment chercher » et sans « avant de répondre ».
 - Ne donne PAS encore la notion. Ne cite pas le titre du cours.
 - etat : "en_cours".
 
@@ -1255,7 +1307,8 @@ But : un mini-cas à rédiger, puis une évaluation.
 Si l'élève n'a pas encore rédigé de réponse dans cette étape :
 - Écris le mini-cas dans le cadre suivant, qui change de secteur par rapport à l'accroche.
 ${cadreImpose}
-- Écris un mini-cas de 3 à 4 phrases, concret, avec un petit détail ou une difficulté qui oblige à utiliser la notion.
+${blocComplexite}
+- Écris un mini-cas de 3 à 5 phrases, concret, au niveau de complexité indiqué ci-dessus, avec la difficulté qui oblige à utiliser la notion.
 - Donne une consigne claire et courte à rédiger : en découverte, une question simple ; en entraînement, 2 à 3 phrases à écrire ; en maîtrise, une réponse rédigée avec justification et vocabulaire professionnel.
 - Rappelle que l'élève peut écrire sa réponse ou la dire au micro.
 - etat : "en_cours".

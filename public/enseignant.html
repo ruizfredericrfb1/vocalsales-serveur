@@ -129,13 +129,41 @@
     body.imprime-suivi .matrice-wrap { overflow: visible; }
     body.imprime-suivi #titreImpression { display: block !important; }
   }
+
+  main { max-width: 1100px; }
+  #screenLogin { max-width: 440px; margin: 0 auto; }
+  .barre-haut { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .choix-classe { display: flex; align-items: center; gap: 10px; }
+  .choix-classe select { min-width: 200px; font-weight: 700; }
+  .barre-haut .status { min-height: 0; font-size: .85rem; }
+  .onglets { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .onglets a { white-space: nowrap; text-decoration: none; color: var(--ink); font-weight: 700; padding: 9px 16px; border-radius: 999px 999px 0 0; border: 2px solid transparent; border-bottom: 0; }
+  .onglets a:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .onglets a.actif { color: var(--accent); border-color: var(--line); background: var(--card); }
+  .onglet { display: none; }
+  .onglet.actif { display: block; }
+  .pastille-n { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--ko); color: #fff; font-size: .75rem; text-align: center; }
+  .pastille-n:empty { display: none; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .kpi strong { display: block; font-family: "Poppins", sans-serif; font-size: 1.8rem; line-height: 1.1; color: var(--accent); }
+  .kpi span { color: var(--muted); font-size: .85rem; }
+  .kpi.alerte strong { color: var(--ko); }
+  @media (min-width: 900px) {
+    #tab-accueil, #tab-bilans, #tab-eleves { display: none; }
+    #tab-accueil.actif { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
+    #tab-accueil .kpis { grid-column: 1 / -1; }
+    #tab-bilans.actif { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
+    #tab-eleves.actif { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
+  }
+  @media print { body.imprime-suivi .onglet { display: block !important; } body.imprime-suivi .onglet:not(#tab-classe) { display: none !important; } body.imprime-suivi .barre-haut, body.imprime-suivi .onglets { display: none !important; } }
 </style>
 </head>
 <body>
 <main>
   <div class="band">
     <h1>VocalSales — Espace enseignant</h1>
-    <p class="tagline">Ajouter des élèves et récupérer leur code de connexion.</p>
+    <p class="tagline">Suivi des révisions, bilans et gestion des élèves.</p>
   </div>
 
   <section id="screenLogin">
@@ -148,23 +176,46 @@
   </section>
 
   <div id="app" class="hidden">
+    <div class="barre-haut no-print">
+      <div class="choix-classe">
+        <label for="classeSelect">Classe</label>
+        <select id="classeSelect"></select>
+      </div>
+      <span id="suiviStatus" class="status">Chargement…</span>
+    </div>
+
+    <nav class="onglets no-print" id="onglets" aria-label="Sections">
+      <a href="#accueil" data-tab="accueil">Vue d'ensemble <span class="pastille-n" id="badgeRel"></span></a>
+      <a href="#classe" data-tab="classe">Ma classe</a>
+      <a href="#bilans" data-tab="bilans">Bilans</a>
+      <a href="#signalements" data-tab="signalements">Signalements <span class="pastille-n" id="badgeSig"></span></a>
+      <a href="#cours" data-tab="cours">Cours à faire</a>
+      <a href="#eleves" data-tab="eleves">Élèves</a>
+    </nav>
+
+    <section class="onglet" id="tab-accueil">
+      <div class="kpis" id="kpis"></div>
+    <div class="card" id="relanceCard">
+      <h2 style="margin:0;">À relancer <span class="pastille-n" id="badgeRel2"></span></h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Élèves au niveau Novice, sans révision commencée ou sans séance depuis plus de 14 jours.</p>
+      <div id="aRelancer" class="relance"></div>
+    </div>
     <div class="card">
       <h2 style="margin:0;">Tableau de bord</h2>
       <p style="margin:0; color:var(--muted); font-size:.92rem;">Les élèves à surveiller apparaissent en premier.</p>
       <p id="dashStatus" class="status">Chargement…</p>
       <div id="dashGrid" class="dash-grid hidden"></div>
     </div>
+    </section>
 
+    <section class="onglet" id="tab-classe">
     <div class="card imprimable" id="suiviCard">
-      <h2 style="margin:0;">Suivi de la classe</h2>
+      <h2 style="margin:0;">Avancement de la classe</h2>
       <h3 id="titreImpression" class="hidden" style="margin:0;"></h3>
-      <label for="classeSelect">Classe</label>
-      <select id="classeSelect"></select>
       <div class="barre no-print">
         <button id="exportCsvBtn" class="secondary" type="button">Exporter pour Excel</button>
         <button id="printBtn" class="secondary" type="button">Imprimer / PDF</button>
       </div>
-      <p id="suiviStatus" class="status">Chargement…</p>
 
       <h3 class="sous">Avancement par cours</h3>
       <div class="legende">
@@ -180,17 +231,34 @@
       <h3 class="sous">Avancement par compétence</h3>
       <div id="parCompetence" class="comp"></div>
 
-      <h3 class="sous">À relancer</h3>
-      <div id="aRelancer" class="relance"></div>
     </div>
+    </section>
 
+    <section class="onglet" id="tab-bilans">
     <div class="card" id="pointsCard">
       <h2 style="margin:0;">Points communs de la classe</h2>
       <p style="margin:0; color:var(--muted); font-size:.92rem;">Analyse des « points à travailler » des bilans terminés, regroupés par thèmes, avec une suggestion de reprise en cours.</p>
       <div><button id="syntheseBtn" type="button">Analyser les bilans</button></div>
       <div id="syntheseOut" style="display:grid; gap:8px;"></div>
     </div>
+    <div class="card">
+      <h2 style="margin:0;">Révisions — suivi par élève</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Cours suivis avec le prof IA. Clique sur un cours pour lire le bilan.</p>
+      <p id="revStatus" class="status">Chargement…</p>
+      <div id="revList" style="display:grid; gap:12px;"></div>
+    </div>
+    </section>
 
+    <section class="onglet" id="tab-signalements">
+    <div class="card">
+      <h2 style="margin:0;">Réponses signalées</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Réponses du prof IA que des élèves ont jugées douteuses.</p>
+      <p id="sigStatus" class="status">Chargement…</p>
+      <div id="sigList" style="display:grid; gap:10px;"></div>
+    </div>
+    </section>
+
+    <section class="onglet" id="tab-cours">
     <div class="card" id="assignCard">
       <h2 style="margin:0;">Cours à faire</h2>
       <p style="margin:0; color:var(--muted); font-size:.92rem;">Choisis un cours pour la classe sélectionnée : il apparaît chez les élèves avec la mention « À faire ».</p>
@@ -202,21 +270,9 @@
       <p id="assignStatus" class="status"></p>
       <div id="assignList" style="display:grid; gap:8px;"></div>
     </div>
+    </section>
 
-    <div class="card">
-      <h2 style="margin:0;">Révisions — suivi par élève</h2>
-      <p style="margin:0; color:var(--muted); font-size:.92rem;">Cours suivis avec le prof IA. Clique sur un cours pour lire le bilan.</p>
-      <p id="revStatus" class="status">Chargement…</p>
-      <div id="revList" style="display:grid; gap:12px;"></div>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:0;">Réponses signalées</h2>
-      <p style="margin:0; color:var(--muted); font-size:.92rem;">Réponses du prof IA que des élèves ont jugées douteuses.</p>
-      <p id="sigStatus" class="status">Chargement…</p>
-      <div id="sigList" style="display:grid; gap:10px;"></div>
-    </div>
-
+    <section class="onglet" id="tab-eleves">
     <div class="card">
       <h2 style="margin:0;">Ajouter un élève</h2>
       <label for="nomInput">Nom de l'élève</label>
@@ -227,7 +283,6 @@
       <div id="createStatus" class="status"></div>
       <div id="createResult" class="result hidden"></div>
     </div>
-
     <div class="card">
       <h2 style="margin:0;">Élèves existants</h2>
       <div id="listStatus" class="status">Chargement…</div>
@@ -236,7 +291,6 @@
         <tbody id="studentsBody"></tbody>
       </table>
     </div>
-
     <div class="card">
       <h2 style="margin:0;">Point hebdomadaire — Compétence de la semaine</h2>
       <p id="currentFocus" style="margin:0; color:var(--muted);">Chargement…</p>
@@ -245,12 +299,13 @@
       <button id="focusSetBtn">Définir pour toute la classe</button>
       <div id="focusSetStatus" class="status"></div>
     </div>
-
     <div class="card">
       <h2 style="margin:0;">Positionnements récents (E31/E32) — par élève</h2>
       <div id="posListStatus" class="status">Chargement…</div>
       <div id="posGroups" class="hidden" style="display:grid; gap:14px;"></div>
     </div>
+  
+    </section>
   </div>
 </main>
 
@@ -483,6 +538,9 @@ async function loadSignalements() {
       </div>`;
     }).join("");
     $("sigStatus").textContent = rows.length ? "" : "Aucune réponse signalée pour l'instant.";
+    nbSignalements = rows.length;
+    $("badgeSig").textContent = rows.length || "";
+    majKpis();
   } catch (e) {
     $("sigStatus").textContent = e.message || "Impossible de charger les signalements.";
     $("sigStatus").classList.add("err");
@@ -583,7 +641,29 @@ function rendreSuivi() {
   $("aRelancer").innerHTML = lignes.map(l => `<div class="${l.rouge ? "rouge" : ""}"><strong>${esc(l.nom)}</strong> — ${esc(l.txt)}${l.sub ? "<small>" + esc(l.sub) + "</small>" : ""}</div>`).join("") ||
     (eleves.length ? "Personne à relancer pour le moment." : "");
 
+  const codes = new Set(eleves.map(e => e.code));
+  const mesSessions = D.sessions.filter(s => codes.has(s.student_code));
+  D.kpi = {
+    eleves: eleves.length,
+    termines: mesSessions.filter(s => s.statut === "termine").length,
+    hauts: mesSessions.filter(s => s.niveau_atteint === "Averti" || s.niveau_atteint === "Expert").length,
+    relance: lignes.length
+  };
+  $("badgeRel").textContent = lignes.length || "";
+  $("badgeRel2").textContent = lignes.length || "";
+  majKpis();
   rendreAssignations();
+}
+
+let nbSignalements = 0;
+function majKpis() {
+  const k = D.kpi || { eleves: 0, termines: 0, hauts: 0, relance: 0 };
+  $("kpis").innerHTML =
+    `<div class="kpi"><strong>${k.eleves}</strong><span>élève${k.eleves > 1 ? "s" : ""}</span></div>` +
+    `<div class="kpi"><strong>${k.termines}</strong><span>cours terminé${k.termines > 1 ? "s" : ""}</span></div>` +
+    `<div class="kpi"><strong>${k.hauts}</strong><span>au niveau Averti ou Expert</span></div>` +
+    `<div class="kpi ${k.relance ? "alerte" : ""}"><strong>${k.relance}</strong><span>à relancer</span></div>` +
+    `<div class="kpi ${nbSignalements ? "alerte" : ""}"><strong>${nbSignalements}</strong><span>réponse${nbSignalements > 1 ? "s" : ""} signalée${nbSignalements > 1 ? "s" : ""}</span></div>`;
 }
 
 function rendreAssignations() {
@@ -665,6 +745,17 @@ $("printBtn").onclick = () => {
   window.print();
   setTimeout(() => document.body.classList.remove("imprime-suivi"), 500);
 };
+
+/* ---------- Onglets ---------- */
+function afficherOnglet() {
+  const noms = ["accueil", "classe", "bilans", "signalements", "cours", "eleves"];
+  let n = (location.hash || "").replace("#", "");
+  if (!noms.includes(n)) n = "accueil";
+  document.querySelectorAll(".onglet").forEach(s => s.classList.toggle("actif", s.id === "tab-" + n));
+  document.querySelectorAll("#onglets a").forEach(a => a.classList.toggle("actif", a.dataset.tab === n));
+}
+window.addEventListener("hashchange", afficherOnglet);
+afficherOnglet();
 
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;

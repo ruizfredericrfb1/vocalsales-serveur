@@ -1650,6 +1650,7 @@ Réplique à contrôler :
 async function filtrerEtControler(ctx) {
   let { parsed } = ctx;
   const { systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours } = ctx;
+  const bloquant = ctx.bloquant === true;
   // Filtre : expression familière interdite -> une seconde rédaction est demandée
   const fautif = expressionInterdite(parsed.replique);
   if (fautif) {
@@ -1670,6 +1671,18 @@ async function filtrerEtControler(ctx) {
       } catch (e) { /* on garde la première rédaction */ }
     }
   }
+  // Filtre : formulation qui oriente la réponse (instantané, sans appel supplémentaire à l'IA)
+  if ([1, 2, 5, 6].includes(etape)) {
+    const ORIENTE = /avant de répondre|de (?:manière|façon) (?:sûre|fiable|certaine|vérifiée)|\b(?:dans|à) (?:le|la|l['’]) ?[a-zéèêàâîôûç' -]{2,25} ou (?:dans|à|sur|auprès(?: de)?) (?:son|sa|ses|leur|leurs|l['’]|le|la|les)\b/i;
+    const oriente = ORIENTE.exec(parsed.replique || "");
+    if (oriente) {
+      try {
+        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente contenait « ${oriente[0]} », qui oriente la réponse de l'élève. Réécris la question de façon neutre, sans piste, sans énumération de choix et sans adjectif qui oriente la méthode.`;
+        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+        if (!ORIENTE.test(seconde.replique || "")) parsed = seconde;
+      } catch (e) { /* on garde la première rédaction */ }
+    }
+  }
   // Filtre : éloge excessif après une réponse très courte ou vague -> une seconde rédaction est demandée
   const motsEleve = message.split(/\s+/).filter(Boolean).length;
   const eloge = /\b(exactement|excellente? (?:id[ée]e|r[ée]ponse|r[ée]flexe)|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.exec(parsed.replique || "");
@@ -1684,7 +1697,13 @@ async function filtrerEtControler(ctx) {
   // Seconde vérification par le contrôleur qualité (étapes de dialogue uniquement)
   const poseUneQuestion = /\?\s*$/.test(String(parsed.replique || "").trim()) || /\?/.test(String(parsed.replique || ""));
   const debutControle = Date.now();
-  if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours")) {
+  if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours") && !bloquant) {
+    // Mode normal : l'élève reçoit la réplique tout de suite ; le contrôleur la relit en arrière-plan pour le suivi qualité.
+    const texteAffiche = parsed.replique;
+    controlerReplique({ replique: texteAffiche, etape, niveau, reponseEleve: message, cours })
+      .then(c => noterControle({ conforme: c.conforme, defauts: c.defauts, indisponible: c.indisponible, corrige: false }, texteAffiche, etape, niveau))
+      .catch(() => {});
+  } else if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours")) {
     const ctrl = await controlerReplique({ replique: parsed.replique, etape, niveau, reponseEleve: message, cours });
     parsed.controle = { conforme: ctrl.conforme, defauts: ctrl.defauts, indisponible: Boolean(ctrl.indisponible), corrige: false };
     if (!ctrl.conforme) {
@@ -1766,7 +1785,7 @@ app.post("/api/teacher/controle-qualite", async (req, res) => {
     const optsLecture = { texteLibre: true };
     const brut = normaliserReponseCours(await getValidReply(messages, 700, 2, systeme, optsLecture), sc.etape, opts);
     const avant = await controlerReplique({ replique: brut.replique, etape: sc.etape, niveau, reponseEleve: sc.message, cours });
-    const final = await filtrerEtControler({ parsed: { ...brut }, systeme, messages, maxTokens: 700, optsLecture, opts, etape: sc.etape, message: sc.message, niveau, cours });
+    const final = await filtrerEtControler({ parsed: { ...brut }, systeme, messages, maxTokens: 700, optsLecture, opts, etape: sc.etape, message: sc.message, niveau, cours, bloquant: true });
     const c = final.controle || {};
     return { scenario: sc.nom, etape: sc.etape, replique_brute: brut.replique, conforme_avant: avant.conforme, defauts_avant: avant.defauts, replique_finale: final.replique, conforme_final: c.conforme !== false, defauts_final: c.defauts || [], indisponible: Boolean(avant.indisponible) };
   };

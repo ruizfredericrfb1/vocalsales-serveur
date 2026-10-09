@@ -59,6 +59,16 @@
   }
   .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 
+  /* Grand écran : l'activité occupe la largeur, le texte à gauche et la réponse toujours visible à droite */
+  @media (min-width: 1000px) {
+    main:has(#screenEtape:not(.hidden)) { max-width: 1320px; padding-left: 32px; padding-right: 32px; }
+    #screenEtape:not(.hidden) { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(380px, 1fr); gap: 20px; align-items: start; }
+    #screenEtape > .card:first-child { grid-column: 1; grid-row: 1 / span 2; }
+    #carteReponse, #carteContinuer { grid-column: 2; grid-row: 1; position: sticky; top: 16px; margin: 0; }
+    #screenEtape .replique-ia { font-size: 1.1rem; }
+    #screenEtape .replique-eleve { font-size: 1.05rem; }
+    #carteReponse textarea { min-height: 200px; font-size: 1.05rem; }
+  }
   .progress { display: flex; gap: 6px; margin: 0 0 20px; }
   .progress span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
   .progress span.done { background: var(--accent); }

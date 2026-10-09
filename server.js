@@ -992,7 +992,7 @@ app.get("/api/cours/catalogue", requireStudent, async (req, res) => {
   }));
 
   res.json({
-    eleve: { code: req.studentCode, nom: req.studentName, option: req.studentOption },
+    eleve: { code: req.studentCode, nom: req.studentName, option: req.studentOption, niveau_conseille: niveauConseille(req.studentClasse) },
     cours: enrichi
   });
 });
@@ -1093,7 +1093,7 @@ function PROF_IA_RULES_V2(cours, etape, niveau, nbReponses, opts) {
     : '';
 
   const general = `
-Tu es le Prof IA de VocalSales. Tu fais un cours oral à un élève de Bac Pro Métiers du Commerce et de la Vente (${c._profondeur === 'terminale' ? 'classe de Terminale, 17-18 ans, qui prépare l\'épreuve et son entrée dans la vie professionnelle' : 'classe de Première, 16-17 ans'}). Tu es un professeur bienveillant, clair et motivant. Tu tutoies l'élève.${c._profondeur === 'terminale' ? ' Cet élève est presque un adulte : tu ne le prends jamais pour un enfant, tu vas à l\'essentiel, tu approfondis, tu soulèves les enjeux concrets pour l\'entreprise (décisions, responsabilité, règles à respecter) et tu lui demandes de justifier ses choix.' : ''}
+Tu es le Prof IA de VocalSales. Tu fais un cours oral à un élève de Bac Pro Métiers du Commerce et de la Vente (Première ou Terminale, 16-18 ans). Tu es un professeur bienveillant, clair et motivant. Tu tutoies l'élève.${c._niveau === 'maitrise' ? ' À ce niveau, l\'élève est traité comme un futur professionnel : tu ne le prends jamais pour un enfant, tu vas à l\'essentiel, tu approfondis, tu soulèves les enjeux concrets pour l\'entreprise (décisions, responsabilité, règles à respecter) et tu lui demandes de justifier ses choix.' : ''}
 
 COURS EN COURS
 Titre : ${c.titre || 'Cours'}
@@ -1504,20 +1504,32 @@ function trouverCours(code) {
   return loadCoursCatalogue().find(c => c.code === code) || null;
 }
 
-// Profondeur du cours selon la classe de l'élève : "terminale" ou "premiere" (par défaut).
-function profondeurDeClasse(classe) {
-  return /terminale|\bterm\b|\btle\b|\bt\s?mcv/i.test(String(classe || "")) ? "terminale" : "premiere";
+// Niveau de départ conseillé selon la classe : Découverte en Première, Entraînement en Terminale.
+// C'est une simple suggestion : l'élève choisit librement son niveau.
+function niveauConseille(classe) {
+  return /terminale|\bterm\b|\btle\b|\bt\s?mcv/i.test(String(classe || "")) ? "entrainement" : "decouverte";
 }
 
-// Renvoie le cours adapté à la classe : en Terminale, le bloc "terminale" du cours (s'il existe) remplace le contenu de base.
-function coursPourEleve(cours, classe) {
+function cleNiveau(niveau) {
+  const nv = String(niveau || "decouverte").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return ["decouverte", "entrainement", "maitrise"].includes(nv) ? nv : "decouverte";
+}
+
+// Adapte le cours au niveau choisi :
+// - Découverte : notions de base et situations les plus courantes (les 10 premières) ;
+// - Entraînement : notions de base et toutes les situations ;
+// - Maîtrise : couche d'approfondissement (enjeux, règles, justification) et toutes les situations.
+function coursPourNiveau(cours, niveau) {
   if (!cours) return cours;
-  const { terminale, ...base } = cours;
-  const prof = profondeurDeClasse(classe);
-  if (prof === "terminale" && terminale && typeof terminale === "object") {
-    return { ...base, ...terminale, _profondeur: "terminale" };
+  const { approfondissement, ...base } = cours;
+  const nv = cleNiveau(niveau);
+  const sit = Array.isArray(base.situations_types) ? base.situations_types : [];
+  if (nv === "maitrise" && approfondissement && typeof approfondissement === "object") {
+    const sup = Array.isArray(approfondissement.situations_types) ? approfondissement.situations_types : [];
+    const err = [...(base.erreurs_classiques || []), ...(approfondissement.erreurs_classiques || [])];
+    return { ...base, ...approfondissement, erreurs_classiques: [...new Set(err)], situations_types: [...sit, ...sup], _niveau: nv };
   }
-  return { ...base, _profondeur: "premiere" };
+  return { ...base, situations_types: nv === "decouverte" ? sit.slice(0, 10) : sit, _niveau: nv };
 }
 
 /* ---------- Prof IA : un tour de dialogue ---------- */
@@ -1529,7 +1541,7 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
   }
 
   const coursCode = String(req.body.cours_code || req.body.cours || "C1-VEILLE").trim();
-  const cours = coursPourEleve(trouverCours(coursCode), req.studentClasse);
+  const cours = coursPourNiveau(trouverCours(coursCode), req.body.niveau);
   if (!cours) return res.status(404).json({ error: "cours_inconnu", message: "Cours introuvable." });
   if (!cours.disponible || !cours.notion) {
     return res.status(403).json({ error: "cours_indisponible", message: "Ce cours n'est pas encore disponible." });
@@ -1679,15 +1691,15 @@ function ficheSecours(cours) {
 
 app.get("/api/cours/fiche", requireStudent, async (req, res) => {
   const coursCode = String(req.query.c || req.query.cours_code || "").trim();
-  const cours = coursPourEleve(trouverCours(coursCode), req.studentClasse);
+  const cours = coursPourNiveau(trouverCours(coursCode), req.query.niveau);
   if (!cours || !cours.notion) return res.status(404).json({ error: "cours_inconnu", message: "Cours introuvable." });
 
-  const cleFiche = coursCode + "|" + cours._profondeur;
+  const cleFiche = coursCode + "|" + cours._niveau;
   let contenu = cours.fiche || fichesCache.get(cleFiche) || null;
   if (!contenu) {
     contenu = ficheSecours(cours);
     try {
-      const prompt = `Tu prépares une fiche de révision A4 pour un élève de Bac Pro Métiers du Commerce et de la Vente (${cours._profondeur === "terminale" ? "Terminale, 17-18 ans, niveau approfondi" : "Première, 16-17 ans"}). Français correct et précis, vocabulaire professionnel expliqué brièvement.
+      const prompt = `Tu prépares une fiche de révision A4 pour un élève de Bac Pro Métiers du Commerce et de la Vente (Première ou Terminale). Français correct et précis, vocabulaire professionnel expliqué brièvement.
 
 Cours : ${cours.titre}
 Notion : ${cours.notion}

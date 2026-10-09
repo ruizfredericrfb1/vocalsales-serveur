@@ -266,7 +266,7 @@
       </button>
       <button class="niveau-btn" data-niveau="maitrise">
         <strong>Maîtrise</strong>
-        <span>Je prépare l'E2. Réponses rédigées, exigence d'examen.</span>
+        <span>Je prépare l'E2. Réponses rédigées, enjeux de l'entreprise et règles à respecter, exigence d'examen.</span>
       </button>
     </div>
   </section>
@@ -925,6 +925,15 @@ async function init() {
   try {
     const data = await api("/api/cours/catalogue?code=" + encodeURIComponent(studentCode));
     studentNom = (data.eleve && data.eleve.nom) || "";
+    const conseille = data.eleve && data.eleve.niveau_conseille;
+    const btnConseille = conseille && document.querySelector('.niveau-btn[data-niveau="' + conseille + '"]');
+    if (btnConseille && !btnConseille.querySelector(".conseille")) {
+      const t = document.createElement("em");
+      t.className = "conseille";
+      t.textContent = "Niveau conseillé pour commencer";
+      t.style.cssText = "display:inline-block; margin-top:6px; font-style:normal; font-weight:700; font-size:.8rem; color:var(--accent);";
+      btnConseille.appendChild(t);
+    }
     cours = data.cours.find(x => x.code === coursCode);
     if (!cours) { $("titreCours").textContent = "Cours introuvable"; return; }
     $("titreCours").textContent = cours.titre;

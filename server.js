@@ -1627,7 +1627,11 @@ Dernière réponse de l'élève : ${reponseEleve ? "« " + String(reponseEleve).
 
 Réplique à contrôler :
 « ${String(replique || "").slice(0, 1500)} »`;
-    const texte = await callClaude([{ role: "user", content: contenu }], 300, CRITERES_CONTROLE);
+    // délai maximal : au-delà, on laisse passer plutôt que de faire attendre l'élève
+    const texte = await Promise.race([
+      callClaude([{ role: "user", content: contenu }], 250, CRITERES_CONTROLE),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("delai")), 3500))
+    ]);
     const p = extractJson(texte);
     if (!p || typeof p.conforme !== "boolean") return { conforme: true, indisponible: true, defauts: [] };
     const defauts = Array.isArray(p.defauts) ? p.defauts.map(x => String(x).slice(0, 240)).filter(Boolean).slice(0, 5) : [];
@@ -1673,7 +1677,8 @@ async function filtrerEtControler(ctx) {
   }
 
   // Seconde vérification par le contrôleur qualité (étapes de dialogue uniquement)
-  if ([1, 2, 4, 5, 6].includes(etape)) {
+  const poseUneQuestion = /\?\s*$/.test(String(parsed.replique || "").trim()) || /\?/.test(String(parsed.replique || ""));
+  if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours")) {
     const ctrl = await controlerReplique({ replique: parsed.replique, etape, niveau, reponseEleve: message, cours });
     parsed.controle = { conforme: ctrl.conforme, defauts: ctrl.defauts, indisponible: Boolean(ctrl.indisponible), corrige: false };
     if (!ctrl.conforme) {

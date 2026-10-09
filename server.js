@@ -1233,7 +1233,7 @@ ${blocComplexite}
 Condition de sortie : DÈS que l'élève a envoyé sa première réponse, même très courte, hors sujet ou « je sais pas » :
 - Réagis en une ou deux phrases courtes qui correspondent VRAIMENT à ce que l'élève a écrit. S'il a donné une piste utile, dis en quoi c'est une bonne idée en reprenant ses mots. S'il a répondu à côté, dis simplement que ce n'est pas tout à fait ça mais qu'on va y venir. Seulement s'il dit « je sais pas » ou ne répond pas vraiment, rassure-le avec une formulation soignée (« Aucun problème, nous allons chercher ensemble. »). N'écris JAMAIS « pas grave » ni « pas de souci ».
 - N'ajoute AUCUNE relance, AUCUNE nouvelle question, ne commente pas en détail.
-- Annonce que vous allez maintenant observer la situation de plus près.
+- Annonce seulement que vous allez maintenant observer la situation de plus près. Ne dis pas ce que vous allez chercher ni comment, et n'emploie aucun mot du cours (« fiable », « sûr », « source », « vérifier »).
 - etat : "etape_suivante".`,
 
     2: `
@@ -1662,12 +1662,12 @@ async function filtrerEtControler(ctx) {
   }
   // Filtre : vocabulaire du cours donné trop tôt (étapes 1 et 2) -> une seconde rédaction est demandée
   if ([1, 2].includes(etape)) {
-    const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.exec(parsed.replique || "");
+    const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b|\bfiab(?:le|les|ilité)\b/i.exec(parsed.replique || "");
     if (tropTot) {
       try {
         const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente employait « ${tropTot[0]} », un mot du cours qui doit être donné plus tard par toi, et non deviné par l'élève. Réécris sans ce mot et sans énumérer de pistes dans la question.`;
         const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
-        if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.test(seconde.replique || "")) parsed = seconde;
+        if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b|\bfiab(?:le|les|ilité)\b/i.test(seconde.replique || "")) parsed = seconde;
       } catch (e) { /* on garde la première rédaction */ }
     }
   }

@@ -1605,7 +1605,12 @@ Critères :
 7. Cohérence : la réplique correspond à ce que l'élève a réellement dit et reste dans le cours.`;
 
 // Compteurs en mémoire (remis à zéro à chaque redémarrage du serveur) pour le suivi de la qualité.
-const statsControle = { depuis: new Date().toISOString(), total: 0, conformes: 0, corriges: 0, persistants: 0, indisponibles: 0, derniers: [] };
+const statsControle = { depuis: new Date().toISOString(), total: 0, conformes: 0, corriges: 0, persistants: 0, indisponibles: 0, derniers: [], tours: [] };
+// Durées (en millisecondes) des derniers échanges : total, et part due au contrôleur.
+function noterDuree(totalMs, controleMs, controle) {
+  statsControle.tours.push({ total: totalMs, controle: controleMs || 0, corrige: Boolean(controle && controle.corrige) });
+  if (statsControle.tours.length > 60) statsControle.tours.shift();
+}
 function noterControle(c, replique, etape, niveau) {
   if (c.indisponible) { statsControle.indisponibles++; return; }
   statsControle.total++;
@@ -1678,6 +1683,7 @@ async function filtrerEtControler(ctx) {
 
   // Seconde vérification par le contrôleur qualité (étapes de dialogue uniquement)
   const poseUneQuestion = /\?\s*$/.test(String(parsed.replique || "").trim()) || /\?/.test(String(parsed.replique || ""));
+  const debutControle = Date.now();
   if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours")) {
     const ctrl = await controlerReplique({ replique: parsed.replique, etape, niveau, reponseEleve: message, cours });
     parsed.controle = { conforme: ctrl.conforme, defauts: ctrl.defauts, indisponible: Boolean(ctrl.indisponible), corrige: false };
@@ -1694,6 +1700,7 @@ async function filtrerEtControler(ctx) {
       } catch (e) { /* on garde la première rédaction */ }
     }
     if (!parsed.controle.conforme) console.error("Contrôleur qualité : défauts persistants", etape, niveau, parsed.controle.defauts);
+    parsed.controle.ms = Date.now() - debutControle;
   }
   return parsed;
 }
@@ -1702,7 +1709,21 @@ async function filtrerEtControler(ctx) {
 
 app.get("/api/teacher/controle-stats", (req, res) => {
   if (!checkTeacherPassword(req, res)) return;
-  res.json(statsControle);
+  const t = statsControle.tours;
+  const moy = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+  const avecCtrl = t.filter(x => x.controle > 0);
+  const corriges = t.filter(x => x.corrige);
+  res.json({
+    ...statsControle,
+    tours: undefined,
+    durees: {
+      nb: t.length,
+      moyenne_totale_ms: moy(t.map(x => x.total)),
+      moyenne_controle_ms: moy(avecCtrl.map(x => x.controle)),
+      moyenne_si_correction_ms: moy(corriges.map(x => x.total)),
+      maximum_ms: t.length ? Math.max(...t.map(x => x.total)) : null
+    }
+  });
 });
 
 // Simule des élèves (réponses vagues, bonnes, hors sujet) sur un cours et un niveau, puis fait contrôler chaque réplique.
@@ -1773,6 +1794,7 @@ app.post("/api/teacher/controle-qualite", async (req, res) => {
 /* ---------- Prof IA : un tour de dialogue ---------- */
 
 app.post("/api/cours/turn", requireStudent, async (req, res) => {
+  const debutTour = Date.now();
   const { minutes } = getStudentUsage(req.studentCode);
   if (minutes >= MONTHLY_LIMIT_MINUTES) {
     return res.status(429).json({ error: "quota_depasse", message: "Quota mensuel atteint. Réessayez le mois prochain." });
@@ -1840,7 +1862,8 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
     let parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme, optsLecture), etape, opts);
 
     parsed = await filtrerEtControler({ parsed, systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours });
-    if (parsed.controle) { noterControle(parsed.controle, parsed.replique, etape, niveau); delete parsed.controle; }
+    if (parsed.controle) { noterControle(parsed.controle, parsed.replique, etape, niveau); noterDuree(Date.now() - debutTour, parsed.controle.ms, parsed.controle); delete parsed.controle; }
+    else if (etape !== 7) noterDuree(Date.now() - debutTour, 0, null);
     if (etape === 1 && tirage) parsed.contexte = tirage;
 
     // Filet de sécurité : si l'étape devait se terminer et que l'IA a oublié

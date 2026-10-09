@@ -875,9 +875,13 @@ async function chargerStatsControle() {
   if (demo) { $("qualiteStats").textContent = "Mode démo : statistiques non disponibles."; return; }
   try {
     const st = await api("/api/teacher/controle-stats");
-    $("qualiteStats").textContent = st.total
+    const sec = (ms) => ms == null ? "—" : (ms / 1000).toFixed(1).replace(".", ",") + " s";
+    const d = st.durees || {};
+    let txt = st.total
       ? `Depuis le dernier redémarrage du serveur : ${st.total} échange(s) contrôlé(s), ${st.corriges} corrigé(s) automatiquement avant affichage, ${st.persistants} à revoir.`
       : "Aucun échange contrôlé pour l'instant (les compteurs repartent à zéro quand le serveur redémarre).";
+    if (d.nb) txt += ` Temps de réponse sur les ${d.nb} derniers échanges : ${sec(d.moyenne_totale_ms)} en moyenne (dont ${sec(d.moyenne_controle_ms)} pour le contrôle), ${sec(d.maximum_ms)} au maximum${d.moyenne_si_correction_ms ? `, ${sec(d.moyenne_si_correction_ms)} quand une correction a été nécessaire` : ""}.`;
+    $("qualiteStats").textContent = txt;
   } catch (e) { $("qualiteStats").textContent = ""; }
 }
 $("qualiteBtn").onclick = async () => {

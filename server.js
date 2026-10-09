@@ -1243,6 +1243,10 @@ But : faire découvrir la notion par l'élève lui-même, grâce à 3 questions 
 - La situation de départ reste affichée à l'écran au-dessus de ta réplique : ne la recopie JAMAIS et ne la raconte pas à nouveau. Fais-y référence en une courte phrase (quinze mots au maximum, par exemple « Revenons à la situation de Maxime. »). N'invente JAMAIS une nouvelle situation.
 - Pose les questions UNE par UNE, de la plus simple à la plus profonde.
 - Question 1 : que voit-on dans la situation ? Question 2 : quel est le problème ou l'information qui manque ? Question 3 : comment le résoudre ou qu'est-ce qui rend la solution bonne ?
+- Tu ne racontes jamais à l'élève ce qu'il doit découvrir : tu ne reformules pas les faits de la situation (« le client pose des questions précises… ») et tu n'écris jamais « observe bien ». Ta réplique contient seulement une courte référence à la situation, une courte réaction à sa réponse, puis la question.
+- Ta question ne contient ni piste, ni choix, ni début de réponse : pas de « ou » qui énumère des lieux ou des types de sources (par exemple « dans le magasin ou dans son entreprise »), et aucun mot du cours comme « source interne », « source externe » ou « fiable », qui seront donnés plus tard.
+- Formulations correctes à utiliser, adaptées à la situation : « Que voyez-vous… » est interdit (tu tutoies) ; écris plutôt « Qu'observes-tu dans cette situation ? », « Quelle information manque à [prénom] ? », « Comment [prénom] peut-il obtenir cette information ? », « Qu'est-ce qui rend la réponse de [prénom] sûre ou non ? ».
+- Écris un français correct : jamais de tournure comme « Qu'est-ce que tu vois que [prénom] pourrait chercher ».
 - Après chaque réponse de l'élève : une courte réaction (une phrase), puis la question suivante. Ne donne jamais la définition à cette étape.
 - Si l'élève fait une erreur classique de la liste, ne dis pas « faux » : pose une question qui l'aide à s'en rendre compte.
 
@@ -1663,6 +1667,17 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
         const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
         if (!expressionInterdite(seconde.replique)) parsed = seconde;
       } catch (e) { /* on garde la première rédaction */ }
+    }
+    // Filtre : vocabulaire du cours donné trop tôt (étapes 1 et 2) -> une seconde rédaction est demandée
+    if ([1, 2].includes(etape)) {
+      const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.exec(parsed.replique || "");
+      if (tropTot) {
+        try {
+          const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente employait « ${tropTot[0]} », un mot du cours qui doit être donné plus tard par toi, et non deviné par l'élève. Réécris sans ce mot et sans énumérer de pistes dans la question.`;
+          const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+          if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.test(seconde.replique || "")) parsed = seconde;
+        } catch (e) { /* on garde la première rédaction */ }
+      }
     }
     // Filtre : éloge excessif après une réponse très courte ou vague -> une seconde rédaction est demandée
     const motsEleve = message.split(/\s+/).filter(Boolean).length;

@@ -1351,6 +1351,13 @@ Termine la réplique en disant que la fiche de synthèse est prête à télécha
   const orthoTxt = o.ortho
     ? "1, 2 ou 3. 3 = très peu d'erreurs ou aucune. 2 = quelques erreurs. 1 = erreurs nombreuses qui gênent la lecture. Ne juge que l'orthographe et la grammaire, jamais le fond."
     : "mets null (la réponse a été dictée à l'oral : l'orthographe ne s'évalue pas).";
+  const blocBanque = (o.attendu || o.reaction) ? `
+
+SITUATION DU JOUR : ÉLÉMENTS ATTENDUS (confidentiel : tu ne les récites jamais, tu t'en sers pour juger les réponses de l'élève)
+${o.attendu || ""}
+${o.reaction ? `
+MODE RÉACTION : le serveur ajoute lui-même la question suivante après ta réplique. Écris UNIQUEMENT une réaction courte (une seule phrase de 25 mots maximum) à la dernière réponse de l'élève, fidèle à ce qu'il a réellement écrit, sans révéler les éléments attendus ni donner de définition. N'écris AUCUNE question et aucun point d'interrogation. Reste sobre : aucun superlatif si la réponse est courte ou vague. etat : "en_cours".` : ""}` : "";
+
   const formeTxt = o.forme ? `
 
 ÉVALUATION DE LA FORMULATION (obligatoire pour ce tour)
@@ -1374,6 +1381,7 @@ Règle : le niveau "Expert" est réservé aux élèves dont l'expression moyenne
     '\n' +
     (etapes[e] || etapes[1]) +
     compteur +
+    blocBanque +
     formeTxt +
     statsTxt
   );
@@ -1485,6 +1493,42 @@ function statistiquesForme(hist) {
   };
 }
 
+/* ---------- Banque de situations pré-écrites et contrôlées (hors dossier public) ---------- */
+
+let BANQUE_CACHE = null;
+function chargerBanque() {
+  if (BANQUE_CACHE) return BANQUE_CACHE;
+  try { BANQUE_CACHE = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "banque-situations.json"), "utf8")); }
+  catch (e) { console.error("Banque de situations illisible:", e && e.message); BANQUE_CACHE = {}; }
+  return BANQUE_CACHE;
+}
+function listeBanque(coursCode, cleNv) {
+  const b = chargerBanque()[coursCode];
+  const l = b && b[cleNv];
+  return Array.isArray(l) ? l.filter(x => x && x.situation && x.question && Array.isArray(x.observation) && x.observation.length === 3 && x.consigne) : [];
+}
+function trouverSituation(coursCode, cleNv, id) {
+  if (!id) return null;
+  return listeBanque(coursCode, cleNv).find(x => x.id === id) || null;
+}
+function tirerSituation(coursCode, cleNv, exclureId, exclureSecteur) {
+  const l = listeBanque(coursCode, cleNv).filter(x => x.id !== exclureId);
+  const autres = l.filter(x => !exclureSecteur || String(x.secteur).toLowerCase() !== String(exclureSecteur).toLowerCase());
+  const base = autres.length ? autres : l;
+  return base.length ? base[Math.floor(Math.random() * base.length)] : null;
+}
+function contexteDeSituation(it) {
+  return { secteur: it.secteur, client: "", canal: "", periode: "", type_probleme: "", prenom: it.prenom, genre: "f", banque_id: it.id };
+}
+// Réaction de l'IA suivie d'une question écrite à l'avance : on retire toute question que l'IA aurait ajoutée.
+function assemblerReaction(parsed, question) {
+  const ph = String(parsed.replique || "").match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [];
+  const gardees = [];
+  for (const x of ph) { if (/\?/.test(x)) break; gardees.push(x.trim()); }
+  const reaction = gardees.join(" ").trim() || "Merci pour ta réponse.";
+  return { ...parsed, replique: reaction + " " + question, etat: "en_cours" };
+}
+
 /* ---------- Tirage au sort (fait par le serveur, pas par l'IA) ---------- */
 
 const SECTEURS = ["un magasin de sport", "une boutique de prêt-à-porter", "un magasin de téléphonie", "un magasin de jeux vidéo", "une épicerie fine", "une parfumerie", "un magasin de bricolage", "un magasin d'électroménager", "une animalerie", "une concession automobile", "une librairie", "une pharmacie", "un magasin de meubles", "une bijouterie", "un magasin de chaussures", "un magasin bio", "une boutique de cosmétiques", "un magasin d'optique", "un magasin de jardinage", "une boutique de vêtements pour enfants", "un magasin de matériel informatique", "une cave à vins", "une boulangerie-pâtisserie", "un magasin de décoration"];
@@ -1509,7 +1553,7 @@ function nettoyerContexte(c) {
   if (!c || typeof c !== "object") return null;
   const t = (v) => String(v || "").slice(0, 80);
   if (!c.secteur) return null;
-  return { secteur: t(c.secteur), client: t(c.client), canal: t(c.canal), periode: t(c.periode), type_probleme: String(c.type_probleme || "").slice(0, 200), prenom: t(c.prenom), genre: c.genre === "m" ? "m" : "f" };
+  return { secteur: t(c.secteur), client: t(c.client), canal: t(c.canal), periode: t(c.periode), type_probleme: String(c.type_probleme || "").slice(0, 200), prenom: t(c.prenom), genre: c.genre === "m" ? "m" : "f", banque_id: String(c.banque_id || "").slice(0, 60) };
 }
 
 /* ---------- Expressions familières interdites (à compléter au fil des tests) ---------- */
@@ -1712,7 +1756,8 @@ async function filtrerEtControler(ctx) {
   // Seconde vérification par le contrôleur qualité (étapes de dialogue uniquement)
   const poseUneQuestion = /\?\s*$/.test(String(parsed.replique || "").trim()) || /\?/.test(String(parsed.replique || ""));
   const debutControle = Date.now();
-  if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours") && !bloquant) {
+  if (ctx.sansControleIA) { /* réaction suivie d'une question écrite à l'avance : rien à contrôler par l'IA */ }
+  else if ([1, 2, 5, 6].includes(etape) && (poseUneQuestion || parsed.etat === "en_cours") && !bloquant) {
     // Mode normal : l'élève reçoit la réplique tout de suite ; le contrôleur la relit en arrière-plan pour le suivi qualité.
     const texteAffiche = parsed.replique;
     controlerReplique({ replique: texteAffiche, etape, niveau, reponseEleve: message, cours })
@@ -1872,8 +1917,26 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
   const evaluer = Boolean(message) && saisie !== "bouton" && etape !== 3 && etape !== 7;
   const opts = { forme: false, ortho: saisie === "clavier" };
   const contexteRecu = nettoyerContexte(req.body.contexte);
+  // Banque de situations pré-écrites : situation, questions et éléments attendus sont connus à l'avance
+  const cleNv = cleNiveau(niveau);
+  const itemContexte = trouverSituation(coursCode, cleNv, contexteRecu && contexteRecu.banque_id);
+  let fixe = null;
+  if (listeBanque(coursCode, cleNv).length) {
+    if (!message && etape === 1) {
+      const it = tirerSituation(coursCode, cleNv, null, null);
+      if (it) fixe = { replique: it.situation + " " + it.question, contexte: contexteDeSituation(it) };
+    } else if (!message && etape === 6) {
+      const it = tirerSituation(coursCode, cleNv, itemContexte && itemContexte.id, itemContexte && itemContexte.secteur);
+      if (it) fixe = { replique: it.situation + " " + it.consigne, contexte: contexteDeSituation(it) };
+    } else if (etape === 2 && itemContexte && nb !== undefined && nb < 3) {
+      if (!message) fixe = { replique: "Revenons à la situation " + (/^[aeiouyàâéèêëîïôûhAEIOUYÀÂÉÈÊËÎÏÔÛH]/.test(itemContexte.prenom) ? "d'" : "de ") + itemContexte.prenom + ". " + itemContexte.observation[0] };
+      else opts.reaction = true;
+    }
+  }
+  if (itemContexte && !fixe && [1, 2, 6].includes(etape)) opts.attendu = itemContexte.attendu;
   let tirage = null;
-  if (!message && etape === 1) tirage = tirerContexte(null, cours, null);
+  if (fixe) { /* pas de tirage : la situation vient de la banque */ }
+  else if (!message && etape === 1) tirage = tirerContexte(null, cours, null);
   else if (!message && etape === 6) tirage = tirerContexte(contexteRecu ? contexteRecu.secteur : null, cours, contexteRecu ? contexteRecu.type_probleme : null);
   if (tirage) opts.tirage = tirage;
   const derniereQuestion = [...hist].reverse().find(h => h.role === "assistant");
@@ -1893,9 +1956,16 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
     : { texteLibre: etape !== 7 };
 
   try {
-    let parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme, optsLecture), etape, opts);
-
-    parsed = await filtrerEtControler({ parsed, systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours });
+    let parsed;
+    if (fixe) {
+      parsed = { replique: fixe.replique, etat: "en_cours" };
+      if (fixe.contexte) parsed.contexte = fixe.contexte;
+      noterDuree(Date.now() - debutTour, 0, null);
+    } else {
+      parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme, optsLecture), etape, opts);
+      parsed = await filtrerEtControler({ parsed, systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours, sansControleIA: Boolean(opts.reaction) });
+      if (opts.reaction && itemContexte) parsed = assemblerReaction(parsed, itemContexte.observation[nb]);
+    }
     if (parsed.controle) { noterControle(parsed.controle, parsed.replique, etape, niveau); noterDuree(Date.now() - debutTour, parsed.controle.ms, parsed.controle); delete parsed.controle; }
     else if (etape !== 7) noterDuree(Date.now() - debutTour, 0, null);
     if (etape === 1 && tirage) parsed.contexte = tirage;
@@ -1912,7 +1982,7 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
     const ev = await evaluation;
     if (ev) Object.assign(parsed, ev);
 
-    consumeQuota(req.studentCode, COST_TURN);
+    if (!fixe) consumeQuota(req.studentCode, COST_TURN);
 
     // Bilan : plafonnement du niveau Expert si la formulation est insuffisante + indicateurs de forme
     if (etape === 7 && stats) {

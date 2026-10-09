@@ -181,7 +181,11 @@
         <label for="classeSelect">Classe</label>
         <select id="classeSelect"></select>
       </div>
+      <label class="demo-toggle"><input type="checkbox" id="demoToggle"> Mode démo (élèves fictifs)</label>
       <span id="suiviStatus" class="status">Chargement…</span>
+    </div>
+    <div id="demoBandeau" class="hidden" style="background:#fff4d6; border:1px solid #e6c766; border-radius:10px; padding:8px 12px; margin-bottom:12px; font-size:.9rem;">
+      <strong>Mode démo :</strong> les élèves et résultats affichés sont fictifs. Rien n'est lu ni enregistré dans ta vraie base.
     </div>
 
     <nav class="onglets no-print" id="onglets" aria-label="Sections">
@@ -287,7 +291,7 @@
       <h2 style="margin:0;">Élèves existants</h2>
       <div id="listStatus" class="status">Chargement…</div>
       <table id="studentsTable" class="hidden">
-        <thead><tr><th>Code</th><th>Nom</th><th>Classe</th></tr></thead>
+        <thead><tr><th>Code</th><th>Nom</th><th>Classe</th><th>Compte</th></tr></thead>
         <tbody id="studentsBody"></tbody>
       </table>
     </div>
@@ -313,7 +317,91 @@
 const $ = (id) => document.getElementById(id);
 let password = "";
 
+/* ---------- Mode démo : élèves fictifs, rien n'est lu ni écrit en base ---------- */
+let demo = false;
+let demoAssignes = null;
+function jours(n) { return new Date(Date.now() - n * 86400000).toISOString(); }
+function demoDonnees() {
+  const T = "Terminale MCV", P = "Première MCV";
+  // [code, nom, classe, état] — état : [niveau_atteint | "cours" | null, jours depuis la dernière séance]
+  const liste = [
+    ["9001", "Léa Martin", T, ["Expert", 2]], ["9002", "Yanis Benali", T, ["Averti", 3]],
+    ["9003", "Inès Fernandez", T, ["Averti", 5]], ["9004", "Mathis Rossi", T, ["Débrouillé", 6]],
+    ["9005", "Camille Durand", T, ["Débrouillé", 1]], ["9006", "Nolan Garcia", T, ["cours", 1]],
+    ["9007", "Sarah Haddad", T, ["Novice", 4]], ["9008", "Lucas Moreau", T, ["cours", 9]],
+    ["9009", "Emma Lopez", T, null], ["9010", "Kylian Petit", T, ["Débrouillé", 21]],
+    ["9011", "Manon Bernard", P, ["Averti", 2]], ["9012", "Rayan Cherif", P, ["Novice", 7]],
+    ["9013", "Jade Lambert", P, ["Débrouillé", 3]], ["9014", "Enzo Marchetti", P, ["cours", 2]],
+    ["9015", "Anaïs Roux", P, null], ["9016", "Tom Giraud", P, ["Averti", 10]]
+  ];
+  const eleves = liste.map(l => ({ code: l[0], nom: l[1], classe: l[2], active: true, created_at: jours(30) }));
+  const bilans = {
+    Expert: { replique: "Très bon travail, tu maîtrises la veille commerciale.", points_forts: ["Sources d'information variées et fiables", "Exemples précis dans ton secteur"], points_a_travailler: [], conseil: "Tu peux maintenant passer au cours suivant." },
+    Averti: { replique: "Bonne maîtrise, quelques précisions à apporter.", points_forts: ["Distinction claire entre veille concurrentielle et veille commerciale"], points_a_travailler: ["Citer la source de chaque information relevée"], conseil: "Relis la fiche et note une source pour chaque exemple." },
+    "Débrouillé": { replique: "Les bases sont là, il reste à les rendre plus précises.", points_forts: ["Notion de veille bien comprise"], points_a_travailler: ["Citer la source de chaque information relevée", "Utiliser le vocabulaire professionnel"], conseil: "Reprends l'étape 3 et reformule chaque notion avec tes mots." },
+    Novice: { replique: "Les notions ne sont pas encore acquises.", points_forts: ["Participation sérieuse au dialogue"], points_a_travailler: ["Citer la source de chaque information relevée", "Différencier veille et simple recherche d'informations", "Utiliser le vocabulaire professionnel"], conseil: "Refais le parcours en Découverte, étape par étape." }
+  };
+  const sessions = [];
+  const sigs = [];
+  liste.forEach(l => {
+    const e = l[3]; if (!e) return;
+    const fini = e[0] !== "cours";
+    sessions.push({
+      student_code: l[0], student_name: l[1], cours_code: "C1-VEILLE", niveau: fini ? "entrainement" : "decouverte",
+      statut: fini ? "termine" : "en_cours", niveau_atteint: fini ? e[0] : null,
+      etape_atteinte: fini ? "bilan" : "dialogue", updated_at: jours(e[1]), bilan: fini ? bilans[e[0]] : null
+    });
+  });
+  sigs.push({
+    student_code: "9012", student_name: "Rayan Cherif", cours_code: "C1-VEILLE", etape: "dialogue", niveau: "decouverte",
+    motif: "Réponse incorrecte", commentaire: "Je ne pense pas que ce soit la bonne définition.",
+    message_prof: "La veille commerciale consiste uniquement à surveiller les prix des concurrents.", created_at: jours(3)
+  });
+  const dash = eleves.map((e, i) => {
+    const s = sessions.find(x => x.student_code === e.code);
+    return { nom: e.nom, classe: e.classe, nbEval: i % 3 === 0 ? 2 : 0, moyenneEval: 13 + (i % 5), nbPositionnement: s ? 1 : 0,
+      dernierNiveau: s && s.niveau_atteint || "—", statut: !s ? "suivre" : s.niveau_atteint === "Novice" ? "alerte" : "ok" };
+  });
+  const pos = sessions.filter(s => s.statut === "termine").slice(0, 6).map(s => ({
+    student_code: s.student_code, student_name: s.student_name, competence_code: "C1.1",
+    competence_libelle: "Réaliser une veille commerciale", niveau_global: s.niveau_atteint, created_at: s.updated_at
+  }));
+  return { eleves, sessions, sigs, dash, pos };
+}
+let DEMO = null;
+function apiDemo(path, opts) {
+  DEMO = DEMO || demoDonnees();
+  const m = (opts.method || "GET").toUpperCase();
+  const p = path.split("?")[0];
+  if (p === "/api/teacher/cours-assignes") {
+    if (!demoAssignes) demoAssignes = [{ classe: "Terminale MCV", cours_code: "C1-VEILLE", date_limite: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) }];
+    if (m === "POST") {
+      const b = JSON.parse(opts.body || "{}");
+      demoAssignes = demoAssignes.filter(a => !(a.classe === b.classe && a.cours_code === b.cours_code));
+      if (!b.supprimer) demoAssignes.push({ classe: b.classe, cours_code: b.cours_code, date_limite: b.date_limite || null });
+      return { ok: true };
+    }
+    return demoAssignes.slice();
+  }
+  if (p === "/api/teacher/synthese-classe") {
+    return { nb_points: 14, themes: [
+      { theme: "Citer ses sources", nb: 6, reprise: "Reprendre en classe : pour chaque information relevée, noter d'où elle vient (site, revue, salon, client)." },
+      { theme: "Vocabulaire professionnel", nb: 5, reprise: "Faire reformuler à l'écrit les mots clés du cours : veille, benchmark, source." },
+      { theme: "Veille et recherche simple", nb: 3, reprise: "Comparer deux situations : une recherche ponctuelle et une veille organisée dans le temps." }
+    ] };
+  }
+  if (m !== "GET") throw new Error("Mode démo : rien n'est enregistré.");
+  if (p === "/api/teacher/students") return DEMO.eleves.slice();
+  if (p === "/api/teacher/cours-sessions") return DEMO.sessions.slice();
+  if (p === "/api/teacher/signalements") return DEMO.sigs.slice();
+  if (p === "/api/teacher/dashboard") return DEMO.dash.slice();
+  if (p === "/api/teacher/positionnements") return DEMO.pos.slice();
+  if (p === "/api/teacher/weekly-focus") return { code: null };
+  return [];
+}
+
 async function api(path, opts = {}) {
+  if (demo) return apiDemo(path, opts);
   const headers = Object.assign({ "x-teacher-password": password }, opts.headers || {});
   const r = await fetch(path, Object.assign({}, opts, { headers }));
   const data = await r.json().catch(() => ({}));
@@ -329,7 +417,9 @@ async function loadStudents() {
     const rows = await api("/api/teacher/students");
     $("studentsBody").innerHTML = rows.map(s => `
       <tr class="${s.active ? "" : "inactive"}">
-        <td>${s.code}</td><td>${s.nom}</td><td>${s.classe || ""}</td>
+        <td>${esc(s.code)}</td><td>${esc(s.nom)}</td>
+        <td><input type="text" class="classe-edit" value="${esc(s.classe || "")}" data-code="${esc(s.code)}" data-avant="${esc(s.classe || "")}" placeholder="Classe" aria-label="Classe de ${esc(s.nom)}" style="width:100%; min-width:110px; margin:0;"></td>
+        <td><button type="button" class="secondary compte-btn" data-code="${esc(s.code)}" data-active="${s.active ? "1" : "0"}">${s.active ? "Désactiver" : "Réactiver"}</button></td>
       </tr>
     `).join("");
     $("listStatus").textContent = rows.length ? "" : "Aucun élève pour l'instant.";
@@ -339,6 +429,45 @@ async function loadStudents() {
     $("listStatus").classList.add("err");
   }
 }
+
+$("studentsBody").addEventListener("change", async (ev) => {
+  const inp = ev.target.closest("input.classe-edit");
+  if (!inp) return;
+  $("listStatus").classList.remove("err");
+  try {
+    await api("/api/teacher/students/" + encodeURIComponent(inp.dataset.code), {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ classe: inp.value.trim() })
+    });
+    inp.dataset.avant = inp.value.trim();
+    $("listStatus").textContent = "Classe enregistrée.";
+    loadSuivi();
+  } catch (e) {
+    inp.value = inp.dataset.avant;
+    $("listStatus").textContent = e.message || "Erreur.";
+    $("listStatus").classList.add("err");
+  }
+});
+$("studentsBody").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button.compte-btn");
+  if (!b) return;
+  const desactiver = b.dataset.active === "1";
+  if (desactiver && !confirm("Désactiver ce compte ? L'élève ne pourra plus se connecter et disparaîtra du suivi. Tu pourras le réactiver ensuite.")) return;
+  b.disabled = true;
+  $("listStatus").classList.remove("err");
+  try {
+    await api("/api/teacher/students/" + encodeURIComponent(b.dataset.code), {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active: !desactiver })
+    });
+    await loadStudents();
+    loadSuivi();
+  } catch (e) {
+    b.disabled = false;
+    $("listStatus").textContent = e.message || "Erreur.";
+    $("listStatus").classList.add("err");
+  }
+});
 
 let competences = [];
 async function loadCompetencesSelect() {
@@ -757,6 +886,23 @@ function afficherOnglet() {
 window.addEventListener("hashchange", afficherOnglet);
 afficherOnglet();
 
+function toutCharger() {
+  loadDashboard();
+  loadSuivi();
+  loadRevisions();
+  loadSignalements();
+  loadStudents();
+  loadCompetencesSelect().then(loadCurrentFocus);
+  loadPositionnements();
+}
+$("demoToggle").onchange = () => {
+  demo = $("demoToggle").checked;
+  DEMO = null; demoAssignes = null;
+  $("demoBandeau").classList.toggle("hidden", !demo);
+  $("classeSelect").value = "";
+  toutCharger();
+};
+
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;
   $("loginError").textContent = "";
@@ -764,13 +910,7 @@ $("loginBtn").onclick = async () => {
     await api("/api/teacher/students");
     $("screenLogin").classList.add("hidden");
     $("app").classList.remove("hidden");
-    loadDashboard();
-    loadSuivi();
-    loadRevisions();
-    loadSignalements();
-    loadStudents();
-    loadCompetencesSelect().then(loadCurrentFocus);
-    loadPositionnements();
+    toutCharger();
   } catch (e) {
     $("loginError").textContent = e.message || "Mot de passe incorrect.";
   }

@@ -325,6 +325,35 @@ app.get("/api/teacher/students", async (req, res) => {
   }
 });
 
+app.patch("/api/teacher/students/:code", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });
+  const code = String(req.params.code || "").trim();
+  if (!/^\d{4}$/.test(code)) return res.status(400).json({ error: "requete_invalide", message: "Code élève invalide." });
+  const patch = {};
+  if (typeof req.body.classe === "string") patch.classe = req.body.classe.trim().slice(0, 80) || null;
+  if (typeof req.body.active === "boolean") patch.active = req.body.active;
+  if (!Object.keys(patch).length) return res.status(400).json({ error: "requete_invalide", message: "Rien à modifier." });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "apikey": SUPABASE_SECRET_KEY,
+        "authorization": `Bearer ${SUPABASE_SECRET_KEY}`,
+        "prefer": "return=representation"
+      },
+      body: JSON.stringify(patch)
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const rows = await r.json();
+    if (!rows.length) return res.status(404).json({ error: "introuvable", message: "Élève introuvable." });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Impossible de modifier cet élève." });
+  }
+});
+
 app.post("/api/teacher/students", async (req, res) => {
   if (!checkTeacherPassword(req, res)) return;
   if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base élèves non configurée." });

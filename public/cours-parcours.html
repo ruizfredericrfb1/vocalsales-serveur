@@ -666,12 +666,12 @@ function bulleProf(h, index) {
   if (h.essentiel && h.essentiel.notion && h.essentiel.notion.length) {
     return '<div class="replique-ia replique-essentiel">' + blocEssentiel(h.essentiel) +
       '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
-      '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
+      '<div class="mention-ia">Message écrit par une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
   }
   const paragraphes = structurerReplique(h.content);
   return '<div class="replique-ia">' + paragraphes + blocEffort(h) +
     '<button type="button" class="reecouter" data-i="' + index + '">🔊 Réécouter</button>' +
-    '<div class="mention-ia">Réponse d\'une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
+    '<div class="mention-ia">Message écrit par une IA, qui peut se tromper. Un doute ? <button type="button" class="lien signaler" data-i="' + index + '">Signaler</button></div></div>';
 }
 function rendreEtape() {
   let html = "";

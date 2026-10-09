@@ -1093,7 +1093,7 @@ function PROF_IA_RULES_V2(cours, etape, niveau, nbReponses, opts) {
     : '';
 
   const general = `
-Tu es le Prof IA de VocalSales. Tu fais un cours oral à un élève de Bac Pro Métiers du Commerce et de la Vente (15-17 ans). Tu es un professeur bienveillant, clair et motivant. Tu tutoies l'élève.
+Tu es le Prof IA de VocalSales. Tu fais un cours oral à un élève de Bac Pro Métiers du Commerce et de la Vente (${c._profondeur === 'terminale' ? 'classe de Terminale, 17-18 ans, qui prépare l\'épreuve et son entrée dans la vie professionnelle' : 'classe de Première, 16-17 ans'}). Tu es un professeur bienveillant, clair et motivant. Tu tutoies l'élève.${c._profondeur === 'terminale' ? ' Cet élève est presque un adulte : tu ne le prends jamais pour un enfant, tu vas à l\'essentiel, tu approfondis, tu soulèves les enjeux concrets pour l\'entreprise (décisions, responsabilité, règles à respecter) et tu lui demandes de justifier ses choix.' : ''}
 
 COURS EN COURS
 Titre : ${c.titre || 'Cours'}
@@ -1209,7 +1209,7 @@ Contenu attendu :
 - "introduction" : une ou deux phrases qui réagissent à ce que l'élève a dit à l'étape 2 (« Comme tu l'as expliqué, … ») et annoncent la synthèse. S'il a presque rien dit, une phrase d'annonce neutre. N'invente rien.
 - "notion" : exactement 3 phrases courtes, claires et précises (une idée par phrase), qui reformulent la notion et la phrase à retenir du cours. Chaque phrase fait 25 mots au maximum.
 - "exemples" : exactement 2 exemples concrets, dans deux secteurs différents, différents de celui de l'accroche. "secteur" : 1 à 3 mots (ex. « Prêt-à-porter »). "texte" : 2 phrases au maximum, qui montrent la notion en action.
-- "mots_cles" : les mots-clés du cours (au maximum 6), chacun avec une définition de 15 mots au maximum.
+- "mots_cles" : les mots-clés du cours (au maximum 8), chacun avec une définition de 15 mots au maximum.
 - Si une erreur classique est apparue à l'étape 2, ajoute-la brièvement à la fin de l'introduction. Sinon n'en parle pas.
 - Aucun markdown, aucun astérisque, aucune balise. Français soigné, sans expression familière.`,
 
@@ -1504,6 +1504,22 @@ function trouverCours(code) {
   return loadCoursCatalogue().find(c => c.code === code) || null;
 }
 
+// Profondeur du cours selon la classe de l'élève : "terminale" ou "premiere" (par défaut).
+function profondeurDeClasse(classe) {
+  return /terminale|\bterm\b|\btle\b|\bt\s?mcv/i.test(String(classe || "")) ? "terminale" : "premiere";
+}
+
+// Renvoie le cours adapté à la classe : en Terminale, le bloc "terminale" du cours (s'il existe) remplace le contenu de base.
+function coursPourEleve(cours, classe) {
+  if (!cours) return cours;
+  const { terminale, ...base } = cours;
+  const prof = profondeurDeClasse(classe);
+  if (prof === "terminale" && terminale && typeof terminale === "object") {
+    return { ...base, ...terminale, _profondeur: "terminale" };
+  }
+  return { ...base, _profondeur: "premiere" };
+}
+
 /* ---------- Prof IA : un tour de dialogue ---------- */
 
 app.post("/api/cours/turn", requireStudent, async (req, res) => {
@@ -1513,7 +1529,7 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
   }
 
   const coursCode = String(req.body.cours_code || req.body.cours || "C1-VEILLE").trim();
-  const cours = trouverCours(coursCode);
+  const cours = coursPourEleve(trouverCours(coursCode), req.studentClasse);
   if (!cours) return res.status(404).json({ error: "cours_inconnu", message: "Cours introuvable." });
   if (!cours.disponible || !cours.notion) {
     return res.status(403).json({ error: "cours_indisponible", message: "Ce cours n'est pas encore disponible." });
@@ -1663,14 +1679,15 @@ function ficheSecours(cours) {
 
 app.get("/api/cours/fiche", requireStudent, async (req, res) => {
   const coursCode = String(req.query.c || req.query.cours_code || "").trim();
-  const cours = trouverCours(coursCode);
+  const cours = coursPourEleve(trouverCours(coursCode), req.studentClasse);
   if (!cours || !cours.notion) return res.status(404).json({ error: "cours_inconnu", message: "Cours introuvable." });
 
-  let contenu = cours.fiche || fichesCache.get(coursCode) || null;
+  const cleFiche = coursCode + "|" + cours._profondeur;
+  let contenu = cours.fiche || fichesCache.get(cleFiche) || null;
   if (!contenu) {
     contenu = ficheSecours(cours);
     try {
-      const prompt = `Tu prépares une fiche de révision A4 pour un élève de Bac Pro Métiers du Commerce et de la Vente (15 ans). Français correct et précis, vocabulaire professionnel expliqué brièvement.
+      const prompt = `Tu prépares une fiche de révision A4 pour un élève de Bac Pro Métiers du Commerce et de la Vente (${cours._profondeur === "terminale" ? "Terminale, 17-18 ans, niveau approfondi" : "Première, 16-17 ans"}). Français correct et précis, vocabulaire professionnel expliqué brièvement.
 
 Cours : ${cours.titre}
 Notion : ${cours.notion}
@@ -1689,7 +1706,7 @@ Règles : la notion en exactement 3 phrases courtes ; un seul exemple concret ; 
           exemple: String(p.exemple || ""),
           schema: p.schema.map(x => String(x)).slice(0, 5)
         };
-        fichesCache.set(coursCode, contenu);
+        fichesCache.set(cleFiche, contenu);
         consumeQuota(req.studentCode, COST_TURN);
       }
     } catch (e) {

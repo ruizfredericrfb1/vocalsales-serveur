@@ -7,22 +7,28 @@
     "epreuve": "E31",
     "ordre": 1,
     "disponible": true,
-    "notion": "Faire de la veille commerciale, c'est chercher, trier et mettre à jour les informations utiles pour bien vendre. Ces informations concernent l'entreprise (ses produits, ses prix), le marché (les concurrents, les tendances, les clients) et la zone de chalandise, c'est-à-dire la zone autour du magasin d'où viennent les clients. Il y a des sources internes (dans l'entreprise : fiches produits, ventes, collègues) et des sources externes (à l'extérieur : sites internet, concurrents, presse, réseaux sociaux). Une bonne information doit être récente, sûre et utile : on la vérifie avant de la donner au client.",
+    "notion": "Faire de la veille commerciale, c'est chercher, trier et mettre à jour en continu les informations utiles pour bien vendre. Ces informations portent sur trois domaines. L'entreprise : ses produits, ses prix, ses promotions, ses stocks. Le marché : les concurrents, les tendances, les attentes des clients. La zone de chalandise : la zone autour du point de vente d'où viennent les clients, avec ses habitants, ses commerces et ses événements. Les informations viennent de deux types de sources. Les sources internes sont dans l'entreprise : fiches produits, logiciel de caisse, tickets de caisse, collègues, responsable. Les sources externes sont à l'extérieur : sites internet, magasins concurrents, presse professionnelle, réseaux sociaux, avis de clients, fournisseurs. Une bonne information est récente, fiable et utile. Avant de la donner à un client, le vendeur vérifie sa date, sa source, et la recoupe avec une deuxième source. S'il n'est pas sûr, il le dit et vérifie, plutôt que de répondre au hasard.",
     "mots_cles": [
       "information commerciale",
       "fiabilité",
       "sources internes",
       "sources externes",
       "marché",
-      "zone de chalandise"
+      "zone de chalandise",
+      "concurrent",
+      "recoupement"
     ],
     "erreurs_classiques": [
       "Confondre source interne (dans l'entreprise) et source externe (à l'extérieur)",
       "Croire qu'une information ancienne ou sans source est fiable",
-      "Répondre au client sans vérifier l'information",
-      "Oublier que le vendeur doit aussi connaître sa zone de chalandise"
+      "Répondre au client sans vérifier l'information, pour ne pas paraître ignorant",
+      "Oublier que le vendeur doit aussi connaître sa zone de chalandise",
+      "S'arrêter à une seule source sans recouper avec une deuxième",
+      "Garder l'information pour soi au lieu de la partager avec l'équipe",
+      "Confondre la veille, qui est régulière, avec une recherche faite une seule fois",
+      "Considérer qu'un avis de client sur internet est une information vérifiée"
     ],
-    "essentiel": "Faire de la veille, c'est chercher, trier et mettre à jour en continu les informations utiles sur son entreprise, son marché et sa zone de chalandise, pour conseiller le client avec des informations sûres et récentes.",
+    "essentiel": "Faire de la veille, c'est chercher, trier, vérifier et mettre à jour en continu les informations utiles sur son entreprise, son marché et sa zone de chalandise, pour conseiller le client avec des informations sûres, récentes et partagées avec l'équipe.",
     "situations_types": [
       "une question sur une promotion en cours que le vendeur ne connaît pas",
       "une information lue par le client sur les réseaux sociaux, dont le vendeur ignore si elle est exacte",
@@ -33,9 +39,59 @@
       "une information trouvée sur un site internet ancien, dont la date est incertaine",
       "une question sur la composition ou l'origine d'un produit que la fiche produit ne précise pas",
       "une information transmise à l'oral par un collègue, que le vendeur n'a pas pu vérifier",
-      "une demande de conseil sur une tendance du moment dans le secteur"
+      "une demande de conseil sur une tendance du moment dans le secteur",
+      "un client qui cite un avis négatif lu sur internet à propos d'un produit vendu dans le magasin",
+      "un client qui affirme que le produit est moins cher sur un site de vente en ligne",
+      "un changement de prix ou de référence que le vendeur découvre en rayon sans en avoir été informé",
+      "une question sur un événement local (marché, salon, fête de quartier) qui modifie la fréquentation du magasin",
+      "un client qui demande si le produit est compatible avec un autre appareil, une taille ou un usage précis",
+      "un collègue qui rapporte une rumeur sur la fermeture d'un concurrent proche"
     ],
-    "competence": "C1.1"
+    "competence": "C1.1",
+    "terminale": {
+      "notion": "En Terminale, la veille commerciale devient une démarche organisée au service de la décision. Elle suit quatre temps : rechercher, sélectionner, exploiter et diffuser. Rechercher, c'est identifier les bonnes sources selon le besoin : sources internes (données de vente, retours des clients, fichier clients), sources externes (INSEE, presse spécialisée, fédérations professionnelles, sites des concurrents, réseaux sociaux, alertes en ligne, salons). Sélectionner, c'est évaluer chaque information selon sa fiabilité (auteur, date, objectivité, recoupement avec une autre source) et son utilité pour l'entreprise. Exploiter, c'est transformer l'information en conséquence concrète : ajuster un conseil, repérer une opportunité ou une menace, proposer un changement de prix, de produit ou de mise en avant. Diffuser, c'est la transmettre à l'équipe et au responsable sous une forme claire (fiche de veille, relevé de prix daté, compte rendu), avec sa source. La veille couvre plusieurs champs : commerciale (clients, offre), concurrentielle (prix, promotions, nouveaux points de vente), technologique (nouveaux outils, paiement, vente en ligne) et réglementaire (étiquetage, prix affichés, garanties, protection des données). Elle engage aussi la responsabilité du vendeur : une information fausse donnée au client peut constituer une pratique commerciale trompeuse, et la comparaison avec un concurrent doit rester loyale et vérifiable.",
+      "mots_cles": [
+        "information commerciale",
+        "fiabilité",
+        "recoupement",
+        "sources internes",
+        "sources externes",
+        "zone de chalandise",
+        "veille concurrentielle",
+        "veille réglementaire",
+        "fiche de veille",
+        "pratique commerciale trompeuse"
+      ],
+      "erreurs_classiques": [
+        "Collecter beaucoup d'informations sans les trier ni en tirer de conséquence pour la vente",
+        "Considérer qu'une information est fiable parce qu'elle est largement partagée sur les réseaux sociaux",
+        "Ne pas dater ni citer la source d'un relevé de prix ou d'une information, ce qui le rend inutilisable",
+        "Se limiter à la veille sur les prix en oubliant l'offre de service, la présentation et la qualité de l'accueil des concurrents",
+        "Annoncer au client une information non vérifiée, ce qui engage l'entreprise",
+        "Dénigrer un concurrent ou donner une comparaison que l'on ne peut pas prouver",
+        "Ne pas diffuser l'information à l'équipe, ce qui crée des réponses différentes d'un vendeur à l'autre",
+        "Négliger la veille réglementaire, par exemple sur l'étiquetage, les garanties ou l'affichage des prix",
+        "Conserver des informations personnelles sur des clients sans raison valable ni respect de leurs droits"
+      ],
+      "essentiel": "La veille commerciale est une démarche organisée en quatre temps (rechercher, sélectionner, exploiter, diffuser) : elle transforme des informations vérifiées et datées en décisions concrètes de conseil et de vente, dans le respect de la loi et de la loyauté envers les concurrents.",
+      "situations_types": [
+        "un client présente une capture d'écran d'une offre concurrente à un prix inférieur, alors que la date et les conditions de cette offre ne sont pas visibles",
+        "le vendeur découvre sur un site spécialisé qu'un produit du rayon fait l'objet d'un rappel, alors que le responsable n'a encore donné aucune consigne",
+        "un concurrent ouvre à 300 mètres du point de vente, et le responsable demande à l'équipe quelles informations rassembler en priorité",
+        "le vendeur doit préparer, pour son équipe, un relevé de prix de cinq produits dans deux magasins concurrents, et décider comment présenter ces informations",
+        "un client demande une garantie ou une compatibilité que la fiche produit ne mentionne pas, et le fournisseur est injoignable avant la fermeture",
+        "deux sources donnent des informations contradictoires sur la composition d'un produit : le site du fabricant et l'étiquette en rayon",
+        "un collègue souhaite répondre à un client en critiquant un concurrent, à partir d'un avis lu sur internet dont l'auteur est inconnu",
+        "une tendance virale sur les réseaux sociaux crée une forte demande pour un produit, alors que le stock est limité et le délai de réapprovisionnement incertain",
+        "le vendeur remarque que les clients posent régulièrement la même question à laquelle l'équipe répond de façons différentes, et doit proposer une solution",
+        "une évolution de la réglementation modifie l'affichage ou l'étiquetage d'une catégorie de produits, et le vendeur doit en informer l'équipe",
+        "un client demande si le magasin propose les mêmes services qu'un concurrent en ligne (livraison, retour, paiement en plusieurs fois), et le vendeur connaît mal l'offre de ce concurrent",
+        "le responsable demande au vendeur de présenter en deux minutes à l'équipe les trois informations de la semaine les plus utiles pour vendre, et d'expliquer son choix",
+        "une promotion annoncée par un concurrent coïncide avec une baisse de fréquentation, et le vendeur doit proposer des actions sans baisser systématiquement les prix",
+        "un fichier de clients contient des informations personnelles, et un collègue propose de s'en servir pour contacter des clients sans leur accord",
+        "le vendeur prépare un conseil pour un client professionnel (petite entreprise, association, collectivité) et doit rassembler des informations sur son secteur d'activité avant le rendez-vous"
+      ]
+    }
   },
   {
     "code": "C1-VENTE",

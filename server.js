@@ -1116,20 +1116,20 @@ function PROF_IA_RULES_V2(cours, etape, niveau, nbReponses, opts) {
 
   const complexite = {
     decouverte: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 1 SUR 3 (repérer)
-- Un seul problème, clair : une seule information manque ou est incertaine, et l'élève peut la repérer facilement.
-- Aucune contradiction entre des sources, aucune contrainte particulière, aucun témoignage de collègue, aucun enjeu de santé ou de sécurité. La situation tient en 3 phrases.
-- Ce que l'élève doit faire : repérer le problème et dire quelle information manque.
-- Question attendue, neutre et simple, par exemple « Quelle information manque à [prénom] ? » ou « Que peut faire [prénom] ? ».`,
+- Un seul problème, clair et directement lié à la notion du cours : l'élève peut le repérer facilement.
+- Aucune contradiction, aucune contrainte particulière, aucun témoignage de collègue, aucun enjeu de santé ou de sécurité. La situation tient en 3 phrases.
+- Ce que l'élève doit faire : repérer le problème et dire ce qui pose difficulté ou ce qui manque.
+- Question attendue, neutre et simple, par exemple « Quel est le problème pour [prénom] ? » ou « Que peut faire [prénom] ? ».`,
     entrainement: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 2 SUR 3 (trier)
-- Deux éléments à démêler : deux informations dont l'une est floue, ou deux sources qui ne disent pas la même chose, ou une information dont l'origine ou la date est incertaine.
+- Deux éléments à démêler : par exemple deux demandes, deux informations, deux contraintes ou deux actions possibles qui ne vont pas dans le même sens.
 - Une contrainte légère (un client qui attend, un rayon chargé). Pas d'enjeu de santé ou de sécurité à ce niveau.
-- Ce que l'élève doit faire : trier les informations, dire laquelle est la plus fiable et pourquoi (source, date, utilité), et expliquer sa démarche.
-- Question attendue, neutre, par exemple « Comment [prénom] peut-elle s'y prendre ? » ou « Quelle information [prénom] peut-elle retenir, et sur quoi s'appuie-t-elle ? ».`,
+- Ce que l'élève doit faire : trier les éléments, choisir ce qui convient le mieux et expliquer sa démarche en s'appuyant sur la notion du cours.
+- Question attendue, neutre, par exemple « Comment [prénom] peut-elle s'y prendre ? » ou « Quelle solution [prénom] peut-elle retenir, et sur quoi s'appuie-t-elle ? ».`,
     maitrise: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 3 SUR 3 (décider et justifier)
-- Trois éléments ou plus, de fiabilité inégale, avec au moins une contradiction (par exemple l'étiquette, le site du fabricant et l'avis d'un collègue qui divergent).
+- Trois éléments ou plus, avec au moins une tension : deux exigences qui s'opposent (intérêt du client, règle à respecter, délai, coût, image de l'entreprise) ou des informations qui divergent.
 - Une contrainte forte et un enjeu réel : délai court, client mécontent ou pressé, règle à respecter, enjeu financier ou de sécurité.
-- Ce que l'élève doit faire : choisir une démarche, la justifier, et dire précisément ce qu'il répond au client.
-- Question attendue, neutre mais exigeante, par exemple « Quelle démarche [prénom] choisit-elle, et comment la justifie-t-elle auprès du client ? » ou « Que répond [prénom] au client, et pour quelles raisons ? ».`
+- Ce que l'élève doit faire : choisir une démarche, la justifier, et dire précisément ce qu'il fait ou ce qu'il répond au client.
+- Question attendue, neutre mais exigeante, par exemple « Quelle démarche [prénom] choisit-elle, et comment la justifie-t-elle ? » ou « Que répond [prénom] au client, et pour quelles raisons ? ».`
   };
   const blocComplexite = complexite[niv] || complexite.decouverte;
 
@@ -1221,19 +1221,19 @@ L'élève prépare l'épreuve écrite E2.
 But : donner envie et plonger l'élève dans une situation concrète liée à la notion.
 
 Si l'élève n'a encore rien répondu dans cette étape :
-- Écris une situation originale qui place un vendeur ou une vendeuse devant un problème d'information : une question du client à laquelle il ou elle ne connaît pas la réponse, ou une information dont la fiabilité est incertaine. Si un type de problème est imposé, la situation doit l'illustrer.
+- Écris une situation de travail originale et réaliste qui place un vendeur ou une vendeuse devant un problème que la notion du cours permet de résoudre (appuie-toi sur la notion, les mots-clés, les erreurs classiques et le type de problème imposé s'il y en a un). La situation doit illustrer ce type de problème sans nommer la notion.
 ${cadreImpose}
-- La situation pose le problème sans donner la leçon : n'annonce JAMAIS les conséquences d'une réponse non vérifiée (pas de « cela risque de… », pas de « perdre la confiance du client ») et ne suggère aucune piste ni aucun lieu où chercher.
+- La situation pose le problème sans donner la leçon : n'annonce JAMAIS les conséquences d'une réponse non vérifiée (pas de « cela risque de… », pas de « perdre la confiance du client ») et ne suggère aucune piste de solution.
 ${blocComplexite}
 - 3 à 5 phrases maximum (5 au niveau 3). Commence directement par la situation, en nommant le personnage (par exemple « Léa, vendeuse dans un magasin de téléphonie, est interrogée par un client… »), sans salutation et sans « Imagine que ».
-- Termine par UNE question ouverte et neutre, au niveau de complexité indiqué ci-dessus, sans « où » ni « comment chercher », sans « avant de répondre » et sans adjectif qui oriente la méthode (« de manière sûre », « fiable », « vérifiée »).
+- Termine par UNE question ouverte et neutre, au niveau de complexité indiqué ci-dessus, sans piste de solution, sans « avant de répondre » et sans adjectif qui oriente la méthode (« de manière sûre », « fiable », « vérifiée »).
 - Ne donne PAS encore la notion. Ne cite pas le titre du cours.
 - etat : "en_cours".
 
 Condition de sortie : DÈS que l'élève a envoyé sa première réponse, même très courte, hors sujet ou « je sais pas » :
 - Réagis en une ou deux phrases courtes qui correspondent VRAIMENT à ce que l'élève a écrit. S'il a donné une piste utile, dis en quoi c'est une bonne idée en reprenant ses mots. S'il a répondu à côté, dis simplement que ce n'est pas tout à fait ça mais qu'on va y venir. Seulement s'il dit « je sais pas » ou ne répond pas vraiment, rassure-le avec une formulation soignée (« Aucun problème, nous allons chercher ensemble. »). N'écris JAMAIS « pas grave » ni « pas de souci ».
 - N'ajoute AUCUNE relance, AUCUNE nouvelle question, ne commente pas en détail.
-- Annonce seulement que vous allez maintenant observer la situation de plus près. Ne dis pas ce que vous allez chercher ni comment, et n'emploie aucun mot du cours (« fiable », « sûr », « source », « vérifier »).
+- Annonce seulement que vous allez maintenant observer la situation de plus près. Ne dis pas ce que vous allez chercher ni comment, et n'emploie aucun mot-clé du cours et aucun mot qui désigne la solution.
 - etat : "etape_suivante".`,
 
     2: `
@@ -1242,10 +1242,10 @@ But : faire découvrir la notion par l'élève lui-même, grâce à 3 questions 
 
 - La situation de départ reste affichée à l'écran au-dessus de ta réplique : ne la recopie JAMAIS et ne la raconte pas à nouveau. Fais-y référence en une courte phrase (quinze mots au maximum, par exemple « Revenons à la situation de Maxime. »). N'invente JAMAIS une nouvelle situation.
 - Pose les questions UNE par UNE, de la plus simple à la plus profonde.
-- Question 1 : que voit-on dans la situation ? Question 2 : quel est le problème ou l'information qui manque ? Question 3 : comment le résoudre ou qu'est-ce qui rend la solution bonne ?
+- Question 1 : que voit-on dans la situation ? Question 2 : quel est le problème rencontré, ou ce qui manque ? Question 3 : comment le résoudre ou qu'est-ce qui rend la solution bonne ?
 - Tu ne racontes jamais à l'élève ce qu'il doit découvrir : tu ne reformules pas les faits de la situation (« le client pose des questions précises… ») et tu n'écris jamais « observe bien ». Ta réplique contient seulement une courte référence à la situation, une courte réaction à sa réponse, puis la question.
-- Ta question ne contient ni piste, ni choix, ni début de réponse : pas de « ou » qui énumère des lieux ou des types de sources (par exemple « dans le magasin ou dans son entreprise »), et aucun mot du cours comme « source interne », « source externe » ou « fiable », qui seront donnés plus tard.
-- Formulations correctes à utiliser, adaptées à la situation : « Que voyez-vous… » est interdit (tu tutoies) ; écris plutôt « Qu'observes-tu dans cette situation ? », « Quelle information manque à [prénom] ? », « Comment [prénom] peut-il obtenir cette information ? », « Qu'est-ce qui rend la réponse de [prénom] sûre ou non ? ».
+- Ta question ne contient ni piste, ni choix, ni début de réponse : pas de « ou » qui énumère des lieux, des moyens ou des types de solutions (par exemple « dans le magasin ou dans son entreprise »), et aucun mot-clé du cours, qui sera donné plus tard.
+- Formulations correctes à utiliser, adaptées à la situation : « Que voyez-vous… » est interdit (tu tutoies) ; écris plutôt « Qu'observes-tu dans cette situation ? », « Quel est le problème pour [prénom] ? », « Comment [prénom] peut-il résoudre ce problème ? », « Que penses-tu de la réaction de [prénom] ? ».
 - Écris un français correct : jamais de tournure comme « Qu'est-ce que tu vois que [prénom] pourrait chercher ».
 - Après chaque réponse de l'élève : une courte réaction (une phrase), puis la question suivante. Ne donne jamais la définition à cette étape.
 - Si l'élève fait une erreur classique de la liste, ne dis pas « faux » : pose une question qui l'aide à s'en rendre compte.
@@ -1601,7 +1601,7 @@ Critères :
 3. Une seule question dans la réplique.
 4. Vocabulaire du cours : aux étapes 1 et 2, la réplique ne donne pas les mots du cours (mots-clés fournis plus bas) ni ne raconte à l'élève ce qu'il doit découvrir.
 5. Compliment proportionné : si la réponse de l'élève est très courte ou vague, la réplique ne contient aucun superlatif (« exactement », « excellente idée », « parfait », « très bien », « bravo »).
-6. Difficulté adaptée (étapes 1 et 6) : niveau Découverte = un seul problème clair, sans contradiction ni enjeu de santé ou de sécurité ; niveau Entraînement = deux éléments à démêler, contrainte légère ; niveau Maîtrise = au moins trois éléments de fiabilité inégale, une contradiction, une contrainte forte, décision à justifier.
+6. Difficulté adaptée (étapes 1 et 6) : niveau Découverte = un seul problème clair, sans contradiction ni enjeu de santé ou de sécurité ; niveau Entraînement = deux éléments à démêler, contrainte légère ; niveau Maîtrise = au moins trois éléments, une tension entre deux exigences, une contrainte forte, décision à justifier.
 7. Cohérence : la réplique correspond à ce que l'élève a réellement dit et reste dans le cours.`;
 
 // Compteurs en mémoire (remis à zéro à chaque redémarrage du serveur) pour le suivi de la qualité.
@@ -1647,6 +1647,20 @@ Réplique à contrôler :
   }
 }
 
+// Mots du cours à ne pas donner trop tôt (étapes 1 et 2). Cours 1 : liste d'origine.
+// Autres cours : mots-clés assez spécifiques ; pas sur l'accroche de départ, où la situation peut les contenir.
+function regexMotsCoursTropTot(cours, etape, message) {
+  const code = cours && cours.code;
+  if (code === "C1-VEILLE") return /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b|\bfiab(?:le|les|ilité)\b/i;
+  if (etape === 1 && !String(message || "").trim()) return null;
+  const mots = (cours && Array.isArray(cours.mots_cles) ? cours.mots_cles : [])
+    .map(m => String(m).toLowerCase().trim())
+    .filter(m => m.length >= 9 && /\s/.test(m));   // expressions de plusieurs mots seulement : les mots courants ne déclenchent rien
+  if (!mots.length) return null;
+  const echap = mots.map(m => m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  try { return new RegExp("(?<![\\p{L}])(?:" + echap.join("|") + ")s?(?![\\p{L}])", "iu"); } catch (e) { return null; }
+}
+
 async function filtrerEtControler(ctx) {
   let { parsed } = ctx;
   const { systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours } = ctx;
@@ -1661,13 +1675,14 @@ async function filtrerEtControler(ctx) {
     } catch (e) { /* on garde la première rédaction */ }
   }
   // Filtre : vocabulaire du cours donné trop tôt (étapes 1 et 2) -> une seconde rédaction est demandée
-  if ([1, 2].includes(etape)) {
-    const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b|\bfiab(?:le|les|ilité)\b/i.exec(parsed.replique || "");
+  const reTropTot = [1, 2].includes(etape) ? regexMotsCoursTropTot(cours, etape, message) : null;
+  if (reTropTot) {
+    const tropTot = reTropTot.exec(parsed.replique || "");
     if (tropTot) {
       try {
         const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente employait « ${tropTot[0]} », un mot du cours qui doit être donné plus tard par toi, et non deviné par l'élève. Réécris sans ce mot et sans énumérer de pistes dans la question.`;
         const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
-        if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b|\bfiab(?:le|les|ilité)\b/i.test(seconde.replique || "")) parsed = seconde;
+        if (!reTropTot.test(seconde.replique || "")) parsed = seconde;
       } catch (e) { /* on garde la première rédaction */ }
     }
   }

@@ -1590,6 +1590,181 @@ function coursPourNiveau(cours, niveau) {
   return { ...base, situations_types: nv === "decouverte" ? sit.slice(0, 10) : sit, _niveau: nv };
 }
 
+
+/* ---------- Contrôleur qualité : filtres + seconde vérification avant affichage ---------- */
+
+const CRITERES_CONTROLE = `Tu es un contrôleur qualité pour une plateforme de révision de lycée professionnel (Bac Pro Métiers du Commerce et de la Vente). Tu relis UNE réplique écrite par un professeur virtuel avant qu'un élève la lise. Tu réponds UNIQUEMENT par un objet JSON : {"conforme": true ou false, "defauts": ["défaut 1", "défaut 2"]}. "defauts" est vide si tout est conforme. Sois strict mais juste : ne signale que de vrais défauts.
+
+Critères :
+1. Français correct et professionnel : aucune faute, aucune tournure bancale ou calquée de l'oral (par exemple « Qu'est-ce que tu vois que X pourrait chercher »), aucune expression familière, aucun mot collé à un autre, aucun texte tronqué.
+2. Question neutre : si la réplique pose une question, elle ne contient ni sa réponse, ni une piste, ni une énumération de choix qui désigne la solution (par exemple « dans le magasin ou dans son entreprise »), ni un adjectif ou une expression qui oriente la méthode (« de manière sûre », « avant de répondre »).
+3. Une seule question dans la réplique.
+4. Vocabulaire du cours : aux étapes 1 et 2, la réplique ne donne pas les mots du cours (mots-clés fournis plus bas) ni ne raconte à l'élève ce qu'il doit découvrir.
+5. Compliment proportionné : si la réponse de l'élève est très courte ou vague, la réplique ne contient aucun superlatif (« exactement », « excellente idée », « parfait », « très bien », « bravo »).
+6. Difficulté adaptée (étapes 1 et 6) : niveau Découverte = un seul problème clair, sans contradiction ni enjeu de santé ou de sécurité ; niveau Entraînement = deux éléments à démêler, contrainte légère ; niveau Maîtrise = au moins trois éléments de fiabilité inégale, une contradiction, une contrainte forte, décision à justifier.
+7. Cohérence : la réplique correspond à ce que l'élève a réellement dit et reste dans le cours.`;
+
+// Compteurs en mémoire (remis à zéro à chaque redémarrage du serveur) pour le suivi de la qualité.
+const statsControle = { depuis: new Date().toISOString(), total: 0, conformes: 0, corriges: 0, persistants: 0, indisponibles: 0, derniers: [] };
+function noterControle(c, replique, etape, niveau) {
+  if (c.indisponible) { statsControle.indisponibles++; return; }
+  statsControle.total++;
+  if (c.conforme && !c.corrige) statsControle.conformes++;
+  else if (c.conforme && c.corrige) statsControle.corriges++;
+  else {
+    statsControle.persistants++;
+    statsControle.derniers.unshift({ date: new Date().toISOString(), etape, niveau, defauts: c.defauts, replique: String(replique || "").slice(0, 400) });
+    statsControle.derniers.length = Math.min(statsControle.derniers.length, 15);
+  }
+}
+
+async function controlerReplique({ replique, etape, niveau, reponseEleve, cours }) {
+  try {
+    const contenu = `Étape : ${etape} sur 7
+Niveau choisi par l'élève : ${niveau}
+Mots-clés du cours : ${(cours && Array.isArray(cours.mots_cles) ? cours.mots_cles.join(", ") : "")}
+Dernière réponse de l'élève : ${reponseEleve ? "« " + String(reponseEleve).slice(0, 300) + " »" : "(aucune, début de l'étape)"}
+
+Réplique à contrôler :
+« ${String(replique || "").slice(0, 1500)} »`;
+    const texte = await callClaude([{ role: "user", content: contenu }], 300, CRITERES_CONTROLE);
+    const p = extractJson(texte);
+    if (!p || typeof p.conforme !== "boolean") return { conforme: true, indisponible: true, defauts: [] };
+    const defauts = Array.isArray(p.defauts) ? p.defauts.map(x => String(x).slice(0, 240)).filter(Boolean).slice(0, 5) : [];
+    return { conforme: p.conforme && defauts.length === 0, defauts };
+  } catch (e) {
+    // en cas de panne du contrôleur, on ne bloque jamais l'élève
+    return { conforme: true, indisponible: true, defauts: [] };
+  }
+}
+
+async function filtrerEtControler(ctx) {
+  let { parsed } = ctx;
+  const { systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours } = ctx;
+  // Filtre : expression familière interdite -> une seconde rédaction est demandée
+  const fautif = expressionInterdite(parsed.replique);
+  if (fautif) {
+    try {
+      const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente contenait l'expression familière « ${fautif} ». Réécris ta réponse dans un français soigné, sans cette expression ni aucune autre expression familière.`;
+      const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+      if (!expressionInterdite(seconde.replique)) parsed = seconde;
+    } catch (e) { /* on garde la première rédaction */ }
+  }
+  // Filtre : vocabulaire du cours donné trop tôt (étapes 1 et 2) -> une seconde rédaction est demandée
+  if ([1, 2].includes(etape)) {
+    const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.exec(parsed.replique || "");
+    if (tropTot) {
+      try {
+        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente employait « ${tropTot[0]} », un mot du cours qui doit être donné plus tard par toi, et non deviné par l'élève. Réécris sans ce mot et sans énumérer de pistes dans la question.`;
+        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+        if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.test(seconde.replique || "")) parsed = seconde;
+      } catch (e) { /* on garde la première rédaction */ }
+    }
+  }
+  // Filtre : éloge excessif après une réponse très courte ou vague -> une seconde rédaction est demandée
+  const motsEleve = message.split(/\s+/).filter(Boolean).length;
+  const eloge = /\b(exactement|excellente? (?:id[ée]e|r[ée]ponse|r[ée]flexe)|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.exec(parsed.replique || "");
+  if (eloge && message && motsEleve <= 10 && [1, 2, 4, 5, 6].includes(etape)) {
+    try {
+      const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : l'élève a donné une réponse très courte ou vague (« ${message.slice(0, 120)} »). Ta rédaction précédente employait « ${eloge[0]} », ce qui est exagéré. Réécris une réaction sobre : reconnais le bon réflexe en une phrase, puis dis précisément ce qu'il reste à préciser ou à compléter. Aucun superlatif.`;
+      const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+      if (!/\b(exactement|excellent|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.test(seconde.replique || "")) parsed = seconde;
+    } catch (e) { /* on garde la première rédaction */ }
+  }
+
+  // Seconde vérification par le contrôleur qualité (étapes de dialogue uniquement)
+  if ([1, 2, 4, 5, 6].includes(etape)) {
+    const ctrl = await controlerReplique({ replique: parsed.replique, etape, niveau, reponseEleve: message, cours });
+    parsed.controle = { conforme: ctrl.conforme, defauts: ctrl.defauts, indisponible: Boolean(ctrl.indisponible), corrige: false };
+    if (!ctrl.conforme) {
+      try {
+        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : un contrôleur a relevé ces défauts dans ta rédaction précédente : ${ctrl.defauts.join(" ; ")}. Réécris ta réplique en les corrigeant tous, sans changer l'état ni l'objectif de l'étape.`;
+        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+        const ctrl2 = await controlerReplique({ replique: seconde.replique, etape, niveau, reponseEleve: message, cours });
+        if (ctrl2.conforme || ctrl2.defauts.length < ctrl.defauts.length) {
+          const garde = parsed.controle;
+          parsed = seconde;
+          parsed.controle = { conforme: ctrl2.conforme, defauts: ctrl2.defauts, indisponible: false, corrige: true, defautsInitiaux: garde.defauts };
+        }
+      } catch (e) { /* on garde la première rédaction */ }
+    }
+    if (!parsed.controle.conforme) console.error("Contrôleur qualité : défauts persistants", etape, niveau, parsed.controle.defauts);
+  }
+  return parsed;
+}
+
+/* ---------- Contrôle qualité lancé par l'enseignant ---------- */
+
+app.get("/api/teacher/controle-stats", (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  res.json(statsControle);
+});
+
+// Simule des élèves (réponses vagues, bonnes, hors sujet) sur un cours et un niveau, puis fait contrôler chaque réplique.
+app.post("/api/teacher/controle-qualite", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  const coursCode = String(req.body.cours_code || "").trim();
+  const niveau = cleNiveau(req.body.niveau);
+  const cours = coursPourNiveau(trouverCours(coursCode), niveau);
+  if (!cours || !cours.disponible || !cours.notion) return res.status(400).json({ error: "cours_invalide", message: "Cours indisponible." });
+
+  const sitA = "Karim, vendeur dans un magasin d'articles de sport, est interrogé par une cliente sur la compatibilité d'une montre connectée avec son téléphone. Il ne connaît pas la réponse.";
+  const accroche = (q) => ({ role: "assistant", content: sitA + " " + q, etape: 1 });
+  const U = (t, e) => ({ role: "user", content: t, etape: e });
+  const A = (t, e) => ({ role: "assistant", content: t, etape: e });
+  const scenarios = [
+    { nom: "Accroche (début)", etape: 1, hist: [], message: "" },
+    { nom: "Accroche (début, 2e tirage)", etape: 1, hist: [], message: "" },
+    { nom: "Accroche : réponse vague", etape: 1, hist: [accroche("Quelle information manque à Karim ?")], message: "je vais me renseigner" },
+    { nom: "Accroche : réponse hors sujet", etape: 1, hist: [accroche("Quelle information manque à Karim ?")], message: "j'aime bien le foot" },
+    { nom: "Accroche : « je sais pas »", etape: 1, hist: [accroche("Quelle information manque à Karim ?")], message: "je sais pas" },
+    { nom: "Observation : 1re question", etape: 2, hist: [accroche("Quelle information manque à Karim ?"), U("la compatibilité", 1), A("Nous allons observer la situation de plus près.", 1)], message: "" },
+    { nom: "Observation : réponse vague", etape: 2, hist: [accroche("Quelle information manque à Karim ?"), U("la compatibilité", 1), A("Nous allons observer la situation de plus près.", 1), A("Qu'observes-tu dans cette situation ?", 2)], message: "il sait pas" },
+    { nom: "Observation : bonne réponse", etape: 2, hist: [accroche("Quelle information manque à Karim ?"), U("la compatibilité", 1), A("Nous allons observer la situation de plus près.", 1), A("Quelle information manque à Karim ?", 2)], message: "Il ne sait pas si la montre fonctionne avec le téléphone de la cliente, donc il ne peut pas la conseiller correctement." },
+    { nom: "Vérification : 1re question", etape: 5, hist: [accroche("Quelle information manque à Karim ?"), U("la compatibilité", 1)], message: "" },
+    { nom: "Vérification : réponse vague", etape: 5, hist: [A("Que signifie pour toi une information fiable ?", 5)], message: "une info vraie" },
+    { nom: "Application : mini-cas", etape: 6, hist: [], message: "" },
+    { nom: "Application : réponse courte", etape: 6, hist: [A("Voici le cas. Que répond Léa au client ?", 6)], message: "elle verifie" }
+  ];
+
+  const lancer = async (sc) => {
+    const histo = sc.hist.map(h => ({ ...h }));
+    if (sc.message) histo.push(U(sc.message, sc.etape));
+    else histo.push({ role: "user", content: MARQUEUR_DEBUT, etape: undefined });
+    const nb = histo.filter(h => h.role === "user" && h.etape === sc.etape && h.content !== MARQUEUR_DEBUT).length;
+    const messages = histo.map(h => ({ role: h.role, content: h.content }));
+    if (messages[0].role !== "user") messages.unshift({ role: "user", content: MARQUEUR_DEBUT });
+    const opts = { forme: false, ortho: false };
+    if (!sc.message && (sc.etape === 1 || sc.etape === 6)) opts.tirage = tirerContexte(null, cours, null);
+    const systeme = PROF_IA_RULES_V2(cours, sc.etape, niveau, nb, opts);
+    const optsLecture = { texteLibre: true };
+    const brut = normaliserReponseCours(await getValidReply(messages, 700, 2, systeme, optsLecture), sc.etape, opts);
+    const avant = await controlerReplique({ replique: brut.replique, etape: sc.etape, niveau, reponseEleve: sc.message, cours });
+    const final = await filtrerEtControler({ parsed: { ...brut }, systeme, messages, maxTokens: 700, optsLecture, opts, etape: sc.etape, message: sc.message, niveau, cours });
+    const c = final.controle || {};
+    return { scenario: sc.nom, etape: sc.etape, replique_brute: brut.replique, conforme_avant: avant.conforme, defauts_avant: avant.defauts, replique_finale: final.replique, conforme_final: c.conforme !== false, defauts_final: c.defauts || [], indisponible: Boolean(avant.indisponible) };
+  };
+
+  try {
+    const resultats = [];
+    for (let i = 0; i < scenarios.length; i += 4) {
+      const lot = await Promise.all(scenarios.slice(i, i + 4).map(sc => lancer(sc).catch(e => ({ scenario: sc.nom, etape: sc.etape, erreur: String(e && e.message || e) }))));
+      resultats.push(...lot);
+    }
+    const ok = resultats.filter(r => !r.erreur);
+    res.json({
+      cours: coursCode, niveau,
+      total: resultats.length,
+      conformes_avant: ok.filter(r => r.conforme_avant).length,
+      conformes_final: ok.filter(r => r.conforme_final).length,
+      erreurs: resultats.filter(r => r.erreur).length,
+      resultats
+    });
+  } catch (e) {
+    res.status(502).json({ error: "controle_erreur", message: "Le contrôle qualité n'a pas pu aller au bout." });
+  }
+});
+
 /* ---------- Prof IA : un tour de dialogue ---------- */
 
 app.post("/api/cours/turn", requireStudent, async (req, res) => {
@@ -1659,36 +1834,8 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
   try {
     let parsed = normaliserReponseCours(await getValidReply(messages, maxTokens, 3, systeme, optsLecture), etape, opts);
 
-    // Filtre : expression familière interdite -> une seconde rédaction est demandée
-    const fautif = expressionInterdite(parsed.replique);
-    if (fautif) {
-      try {
-        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente contenait l'expression familière « ${fautif} ». Réécris ta réponse dans un français soigné, sans cette expression ni aucune autre expression familière.`;
-        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
-        if (!expressionInterdite(seconde.replique)) parsed = seconde;
-      } catch (e) { /* on garde la première rédaction */ }
-    }
-    // Filtre : vocabulaire du cours donné trop tôt (étapes 1 et 2) -> une seconde rédaction est demandée
-    if ([1, 2].includes(etape)) {
-      const tropTot = /\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.exec(parsed.replique || "");
-      if (tropTot) {
-        try {
-          const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente employait « ${tropTot[0]} », un mot du cours qui doit être donné plus tard par toi, et non deviné par l'élève. Réécris sans ce mot et sans énumérer de pistes dans la question.`;
-          const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
-          if (!/\bsources? (?:internes?|externes?)\b|\b(?:interne|externe)s?\b|\bzone de chalandise\b|\bveille\b/i.test(seconde.replique || "")) parsed = seconde;
-        } catch (e) { /* on garde la première rédaction */ }
-      }
-    }
-    // Filtre : éloge excessif après une réponse très courte ou vague -> une seconde rédaction est demandée
-    const motsEleve = message.split(/\s+/).filter(Boolean).length;
-    const eloge = /\b(exactement|excellente? (?:id[ée]e|r[ée]ponse|r[ée]flexe)|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.exec(parsed.replique || "");
-    if (eloge && message && motsEleve <= 10 && [1, 2, 4, 5, 6].includes(etape)) {
-      try {
-        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : l'élève a donné une réponse très courte ou vague (« ${message.slice(0, 120)} »). Ta rédaction précédente employait « ${eloge[0]} », ce qui est exagéré. Réécris une réaction sobre : reconnais le bon réflexe en une phrase, puis dis précisément ce qu'il reste à préciser ou à compléter. Aucun superlatif.`;
-        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
-        if (!/\b(exactement|excellent|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.test(seconde.replique || "")) parsed = seconde;
-      } catch (e) { /* on garde la première rédaction */ }
-    }
+    parsed = await filtrerEtControler({ parsed, systeme, messages, maxTokens, optsLecture, opts, etape, message, niveau, cours });
+    if (parsed.controle) { noterControle(parsed.controle, parsed.replique, etape, niveau); delete parsed.controle; }
     if (etape === 1 && tirage) parsed.contexte = tirage;
 
     // Filet de sécurité : si l'étape devait se terminer et que l'IA a oublié

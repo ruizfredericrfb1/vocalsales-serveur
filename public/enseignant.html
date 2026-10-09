@@ -117,6 +117,8 @@
   .relance small { color: var(--muted); display: block; }
   .theme { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .93rem; }
   .theme strong { display: block; }
+  .theme summary { cursor: pointer; }
+  .theme summary strong { display: inline; }
   .jauge { height: 10px; background: color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 999px; overflow: hidden; }
   .jauge > span { display: block; height: 100%; background: var(--accent); }
   .comp { display: grid; gap: 4px; font-size: .92rem; }
@@ -273,6 +275,22 @@
       <div><button id="assignBtn" type="button">Assigner à la classe</button></div>
       <p id="assignStatus" class="status"></p>
       <div id="assignList" style="display:grid; gap:8px;"></div>
+    </div>
+    <div class="card" id="qualiteCard">
+      <h2 style="margin:0;">Contrôle qualité du Prof IA</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Un contrôleur automatique relit chaque question du Prof IA avant que l'élève la voie. Ici, tu peux lancer un test : 12 faux élèves (réponses vagues, bonnes, hors sujet) sont simulés, et tu lis un résumé. Compte environ une minute.</p>
+      <div id="qualiteStats" class="status"></div>
+      <label for="qualiteCours">Cours</label>
+      <select id="qualiteCours"></select>
+      <label for="qualiteNiveau">Niveau</label>
+      <select id="qualiteNiveau">
+        <option value="decouverte">Découverte</option>
+        <option value="entrainement">Entraînement</option>
+        <option value="maitrise">Maîtrise</option>
+      </select>
+      <div><button id="qualiteBtn" type="button">Lancer le contrôle</button></div>
+      <p id="qualiteStatus" class="status"></p>
+      <div id="qualiteOut" style="display:grid; gap:8px;"></div>
     </div>
     </section>
 
@@ -720,6 +738,7 @@ async function loadSuivi() {
       (sansClasse ? '<option value="__none__">Sans classe</option>' : "");
     if ([...$("classeSelect").options].some(o => o.value === avant)) $("classeSelect").value = avant;
     $("assignCours").innerHTML = coursDispo().map(c => `<option value="${esc(c.code)}">${esc(c.titre)}</option>`).join("");
+    $("qualiteCours").innerHTML = $("assignCours").innerHTML;
     $("suiviStatus").textContent = "";
     rendreSuivi();
   } catch (e) {
@@ -852,6 +871,43 @@ $("syntheseBtn").onclick = async () => {
   } finally { $("syntheseBtn").disabled = false; }
 };
 
+async function chargerStatsControle() {
+  if (demo) { $("qualiteStats").textContent = "Mode démo : statistiques non disponibles."; return; }
+  try {
+    const st = await api("/api/teacher/controle-stats");
+    $("qualiteStats").textContent = st.total
+      ? `Depuis le dernier redémarrage du serveur : ${st.total} échange(s) contrôlé(s), ${st.corriges} corrigé(s) automatiquement avant affichage, ${st.persistants} à revoir.`
+      : "Aucun échange contrôlé pour l'instant (les compteurs repartent à zéro quand le serveur redémarre).";
+  } catch (e) { $("qualiteStats").textContent = ""; }
+}
+$("qualiteBtn").onclick = async () => {
+  if (demo) { $("qualiteStatus").textContent = "Mode démo : décoche-le pour lancer un vrai contrôle."; return; }
+  $("qualiteBtn").disabled = true;
+  $("qualiteStatus").classList.remove("err");
+  $("qualiteStatus").textContent = "Test en cours… environ une minute, ne ferme pas la page.";
+  $("qualiteOut").innerHTML = "";
+  try {
+    const r = await api("/api/teacher/controle-qualite", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cours_code: $("qualiteCours").value, niveau: $("qualiteNiveau").value }) });
+    const aRevoir = r.resultats.filter(x => x.erreur || x.conforme_final === false);
+    const corriges = r.resultats.filter(x => !x.erreur && !x.conforme_avant && x.conforme_final);
+    $("qualiteStatus").textContent = "";
+    $("qualiteOut").innerHTML =
+      `<div class="theme" style="border-left:4px solid ${aRevoir.length ? "var(--ko)" : "var(--ok, #1a7f4b)"};"><strong>${r.total - aRevoir.length} échange(s) sur ${r.total} conformes à l'affichage</strong>` +
+      `Avant correction automatique : ${r.conformes_avant} conformes. ${corriges.length} défaut(s) corrigé(s) par le contrôleur. ${aRevoir.length} à revoir.</div>` +
+      r.resultats.filter(x => x.erreur || !x.conforme_avant).map(x => x.erreur
+        ? `<details class="theme"><summary><strong>${esc(x.scenario)}</strong> — test non abouti</summary>${esc(x.erreur)}</details>`
+        : `<details class="theme"${x.conforme_final ? "" : " open"}><summary><strong>${esc(x.scenario)}</strong> — ${x.conforme_final ? "défaut corrigé automatiquement" : "à revoir"}</summary>
+            <p style="margin:6px 0 2px;"><em>Défauts relevés :</em> ${esc((x.defauts_avant || []).join(" ; ") || "—")}</p>
+            <p style="margin:6px 0 2px;"><em>Texte d'origine :</em> ${esc(x.replique_brute)}</p>
+            <p style="margin:6px 0 2px;"><em>Texte affiché à l'élève :</em> ${esc(x.replique_finale)}</p></details>`).join("");
+    chargerStatsControle();
+  } catch (e) {
+    $("qualiteStatus").textContent = e.message || "Erreur.";
+    $("qualiteStatus").classList.add("err");
+  } finally { $("qualiteBtn").disabled = false; }
+};
+
 $("exportCsvBtn").onclick = () => {
   const cours = coursDispo();
   const cell = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
@@ -887,6 +943,7 @@ window.addEventListener("hashchange", afficherOnglet);
 afficherOnglet();
 
 function toutCharger() {
+  chargerStatsControle();
   loadDashboard();
   loadSuivi();
   loadRevisions();

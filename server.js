@@ -1117,12 +1117,12 @@ function PROF_IA_RULES_V2(cours, etape, niveau, nbReponses, opts) {
   const complexite = {
     decouverte: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 1 SUR 3 (repérer)
 - Un seul problème, clair : une seule information manque ou est incertaine, et l'élève peut la repérer facilement.
-- Aucune contradiction entre des sources, aucune contrainte particulière.
+- Aucune contradiction entre des sources, aucune contrainte particulière, aucun témoignage de collègue, aucun enjeu de santé ou de sécurité. La situation tient en 3 phrases.
 - Ce que l'élève doit faire : repérer le problème et dire quelle information manque.
 - Question attendue, neutre et simple, par exemple « Quelle information manque à [prénom] ? » ou « Que peut faire [prénom] ? ».`,
     entrainement: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 2 SUR 3 (trier)
 - Deux éléments à démêler : deux informations dont l'une est floue, ou deux sources qui ne disent pas la même chose, ou une information dont l'origine ou la date est incertaine.
-- Une contrainte légère (un client qui attend, un rayon chargé).
+- Une contrainte légère (un client qui attend, un rayon chargé). Pas d'enjeu de santé ou de sécurité à ce niveau.
 - Ce que l'élève doit faire : trier les informations, dire laquelle est la plus fiable et pourquoi (source, date, utilité), et expliquer sa démarche.
 - Question attendue, neutre, par exemple « Comment [prénom] peut-elle s'y prendre ? » ou « Quelle information [prénom] peut-elle retenir, et sur quoi s'appuie-t-elle ? ».`,
     maitrise: `NIVEAU DE COMPLEXITÉ DE LA SITUATION : 3 SUR 3 (décider et justifier)
@@ -1158,6 +1158,7 @@ RÈGLES D'ÉCRITURE (très important, ta réplique est lue à voix haute)
 - Les messages de l'élève viennent parfois de la reconnaissance vocale : s'il y a des fautes ou des mots bizarres, devine ce qu'il voulait dire et ne le lui reproche jamais.
 - Si l'élève répond à côté, très court, ou « je sais pas » : reste gentil, ne le fais jamais se sentir nul, et avance quand même.
 - Ta réaction doit toujours correspondre au contenu réel de la réponse : félicite ce qui est juste, nuance ce qui est incomplet, rassure seulement si l'élève est perdu.
+- Les compliments sont proportionnés à la précision de la réponse. Une réponse très courte ou vague (par exemple « je vais me renseigner », « je demande à quelqu'un ») n'a rien d'excellent : reconnais le bon réflexe en une phrase sobre, puis dis ce qu'il reste à préciser. N'emploie « exactement », « excellent », « excellente idée », « parfait », « très bien », « bravo » ou « tout à fait » que pour une réponse précise, complète et justifiée. Reste chaleureux au niveau Découverte, mais honnête : encourager l'effort ne veut pas dire exagérer la qualité.
 - Cite des exemples concrets, réalistes et professionnels (enseignes, marques, outils numériques, situations de vente rencontrées en entreprise ou en stage).
 
 RÈGLES POUR TES QUESTIONS (valables à toutes les étapes)
@@ -1225,7 +1226,7 @@ ${cadreImpose}
 - La situation pose le problème sans donner la leçon : n'annonce JAMAIS les conséquences d'une réponse non vérifiée (pas de « cela risque de… », pas de « perdre la confiance du client ») et ne suggère aucune piste ni aucun lieu où chercher.
 ${blocComplexite}
 - 3 à 5 phrases maximum (5 au niveau 3). Commence directement par la situation, en nommant le personnage (par exemple « Léa, vendeuse dans un magasin de téléphonie, est interrogée par un client… »), sans salutation et sans « Imagine que ».
-- Termine par UNE question ouverte et neutre, au niveau de complexité indiqué ci-dessus, sans « où » ni « comment chercher » et sans « avant de répondre ».
+- Termine par UNE question ouverte et neutre, au niveau de complexité indiqué ci-dessus, sans « où » ni « comment chercher », sans « avant de répondre » et sans adjectif qui oriente la méthode (« de manière sûre », « fiable », « vérifiée »).
 - Ne donne PAS encore la notion. Ne cite pas le titre du cours.
 - etat : "en_cours".
 
@@ -1661,6 +1662,16 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
         const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : ta rédaction précédente contenait l'expression familière « ${fautif} ». Réécris ta réponse dans un français soigné, sans cette expression ni aucune autre expression familière.`;
         const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
         if (!expressionInterdite(seconde.replique)) parsed = seconde;
+      } catch (e) { /* on garde la première rédaction */ }
+    }
+    // Filtre : éloge excessif après une réponse très courte ou vague -> une seconde rédaction est demandée
+    const motsEleve = message.split(/\s+/).filter(Boolean).length;
+    const eloge = /\b(exactement|excellente? (?:id[ée]e|r[ée]ponse|r[ée]flexe)|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.exec(parsed.replique || "");
+    if (eloge && message && motsEleve <= 10 && [1, 2, 4, 5, 6].includes(etape)) {
+      try {
+        const correction = systeme + `\n\nCORRECTION OBLIGATOIRE : l'élève a donné une réponse très courte ou vague (« ${message.slice(0, 120)} »). Ta rédaction précédente employait « ${eloge[0]} », ce qui est exagéré. Réécris une réaction sobre : reconnais le bon réflexe en une phrase, puis dis précisément ce qu'il reste à préciser ou à compléter. Aucun superlatif.`;
+        const seconde = normaliserReponseCours(await getValidReply(messages, maxTokens, 2, correction, optsLecture), etape, opts);
+        if (!/\b(exactement|excellent|parfait|tr[èe]s bien|bravo|tout à fait|absolument)\b/i.test(seconde.replique || "")) parsed = seconde;
       } catch (e) { /* on garde la première rédaction */ }
     }
     if (etape === 1 && tirage) parsed.contexte = tirage;

@@ -75,6 +75,23 @@
   .dash-item.alerte .dash-badge { background: color-mix(in srgb, var(--ko) 18%, transparent); color: var(--ko); }
   .dash-item.suivre .dash-badge { background: color-mix(in srgb, var(--accent2, #9a6b00) 20%, transparent); color: var(--accent2, #9a6b00); }
   .dash-item.ok .dash-badge { background: var(--client, #ece7fb); color: var(--accent); }
+
+  .rev-eleve { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; }
+  .rev-eleve h3 { margin: 0; font-family: "Poppins", sans-serif; font-weight: 700; font-size: 1.02rem; }
+  .rev-cours { border-top: 1px solid var(--line); padding-top: 8px; }
+  .rev-cours summary { cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; list-style: none; }
+  .rev-cours summary::-webkit-details-marker { display: none; }
+  .rev-titre { font-weight: 700; }
+  .rev-meta { grid-column: 1 / -1; color: var(--muted); font-size: .85rem; }
+  .pastille { font-size: .78rem; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .pastille.novice { background: color-mix(in srgb, var(--ko) 16%, transparent); color: var(--ko); }
+  .pastille.encours { background: color-mix(in srgb, #9a6b00 18%, transparent); color: #9a6b00; }
+  .rev-bilan { margin-top: 10px; display: grid; gap: 8px; font-size: .93rem; }
+  .rev-bilan h4 { margin: 0; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .rev-bilan ul { margin: 2px 0 0; padding-left: 20px; }
+  .signal { border: 1px solid var(--line); border-left: 4px solid var(--ko); border-radius: 10px; padding: 10px 12px; font-size: .92rem; display: grid; gap: 4px; }
+  .signal .qui { color: var(--muted); font-size: .82rem; }
+  .signal blockquote { margin: 2px 0; padding: 6px 10px; background: color-mix(in srgb, var(--muted) 10%, transparent); border-radius: 8px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -99,6 +116,20 @@
       <p style="margin:0; color:var(--muted); font-size:.92rem;">Les élèves à surveiller apparaissent en premier.</p>
       <p id="dashStatus" class="status">Chargement…</p>
       <div id="dashGrid" class="dash-grid hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0;">Révisions — suivi par élève</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Cours suivis avec le prof IA. Clique sur un cours pour lire le bilan.</p>
+      <p id="revStatus" class="status">Chargement…</p>
+      <div id="revList" style="display:grid; gap:12px;"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0;">Réponses signalées</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Réponses du prof IA que des élèves ont jugées douteuses.</p>
+      <p id="sigStatus" class="status">Chargement…</p>
+      <div id="sigList" style="display:grid; gap:10px;"></div>
     </div>
 
     <div class="card">
@@ -264,8 +295,7 @@ async function loadDashboard() {
       if (r.nbPositionnement) bits.push("dernier point E31/E32 : " + r.dernierNiveau);
       if (!bits.length) bits.push("Aucun passage pour l'instant");
       return `<div class="dash-item ${r.statut}">
-        <span></span>
-        <span><span class="dash-name">${r.nom}</span><span class="dash-meta">${r.classe || ""}${r.classe ? " — " : ""}${bits.join(" · ")}</span></span>
+        <span><span class="dash-name">${esc(r.nom)}</span><span class="dash-meta">${r.classe || ""}${r.classe ? " — " : ""}${bits.join(" · ")}</span></span>
         <span class="dash-badge">${dashBadge(r.statut, r)}</span>
       </div>`;
     }).join("");
@@ -277,6 +307,103 @@ async function loadDashboard() {
   }
 }
 
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+const ETAPES = ["Accroche", "Observation guidée", "L'essentiel", "Dialogue libre", "Vérification", "Application", "Bilan"];
+const NIV_LIBELLE = { decouverte: "Découverte", entrainement: "Entraînement", maitrise: "Maîtrise" };
+
+async function loadRevisions() {
+  $("revStatus").textContent = "Chargement…";
+  $("revStatus").classList.remove("err");
+  $("revList").innerHTML = "";
+  try {
+    const [rows, cat] = await Promise.all([
+      api("/api/teacher/cours-sessions"),
+      fetch("/cours-catalogue.json").then(r => r.json()).catch(() => [])
+    ]);
+    const titres = {};
+    (Array.isArray(cat) ? cat : []).forEach(c => { titres[c.code] = c.titre; });
+    const parEleve = new Map();
+    for (const s of rows) {
+      const k = s.student_code;
+      if (!parEleve.has(k)) parEleve.set(k, { nom: s.student_name || k, cours: [] });
+      parEleve.get(k).cours.push(s);
+    }
+    // élèves à surveiller d'abord : niveau Novice, puis cours en cours, puis les autres
+    const poids = (g) => g.cours.some(c => c.niveau_atteint === "Novice") ? 0 : g.cours.some(c => c.statut !== "termine") ? 1 : 2;
+    const groupes = [...parEleve.values()].sort((a, b) => poids(a) - poids(b) || a.nom.localeCompare(b.nom));
+    $("revList").innerHTML = groupes.map(g => `
+      <div class="rev-eleve">
+        <h3>${esc(g.nom)}</h3>
+        ${g.cours.map(c => {
+          const fini = c.statut === "termine";
+          const date = c.updated_at ? new Date(c.updated_at).toLocaleDateString("fr-FR") : "";
+          const niv = NIV_LIBELLE[c.niveau] || c.niveau || "";
+          const etape = ETAPES[Math.max(0, ETAPE_INDEX(c.etape_atteinte))] || "";
+          const pastille = fini
+            ? `<span class="pastille ${c.niveau_atteint === "Novice" ? "novice" : ""}">${esc(c.niveau_atteint || "Terminé")}</span>`
+            : `<span class="pastille encours">En cours</span>`;
+          return `<details class="rev-cours">
+            <summary>
+              <span class="rev-titre">${esc(titres[c.cours_code] || c.cours_code)}</span>${pastille}
+              <span class="rev-meta">${esc(niv)}${niv ? " · " : ""}${fini ? "terminé" : "étape : " + esc(etape)}${date ? " · " + date : ""}</span>
+            </summary>
+            ${blocBilan(c.bilan, fini)}
+          </details>`;
+        }).join("")}
+      </div>`).join("");
+    $("revStatus").textContent = rows.length ? "" : "Aucun cours de révision suivi pour l'instant.";
+  } catch (e) {
+    $("revStatus").textContent = e.message || "Impossible de charger le suivi des révisions.";
+    $("revStatus").classList.add("err");
+  }
+}
+
+function ETAPE_INDEX(id) {
+  const ids = ["accroche", "observation", "essentiel", "dialogue", "verification", "application", "bilan"];
+  return ids.indexOf(id);
+}
+
+function liste(titre, items) {
+  if (!Array.isArray(items) || !items.length) return "";
+  return `<div><h4>${titre}</h4><ul>${items.map(i => "<li>" + esc(i) + "</li>").join("")}</ul></div>`;
+}
+
+function blocBilan(b, fini) {
+  if (!b) return `<div class="rev-bilan"><span style="color:var(--muted);">${fini ? "Bilan non enregistré pour ce cours." : "Le bilan apparaîtra à la fin du cours."}</span></div>`;
+  const expr = b.expression && b.expression.label ? `<div><h4>Expression</h4>${esc(b.expression.label)}</div>` : "";
+  const orth = b.orthographe && b.orthographe.label ? `<div><h4>Orthographe</h4>${esc(b.orthographe.label)}</div>` : "";
+  return `<div class="rev-bilan">
+    ${b.replique ? `<div>${esc(b.replique)}</div>` : ""}
+    ${liste("Points forts", b.points_forts)}
+    ${liste("À travailler", b.points_a_travailler)}
+    ${b.conseil ? `<div><h4>Conseil donné à l'élève</h4>${esc(b.conseil)}</div>` : ""}
+    ${expr}${orth}
+  </div>`;
+}
+
+async function loadSignalements() {
+  $("sigStatus").textContent = "Chargement…";
+  $("sigStatus").classList.remove("err");
+  $("sigList").innerHTML = "";
+  try {
+    const rows = await api("/api/teacher/signalements");
+    $("sigList").innerHTML = rows.map(s => {
+      const date = s.created_at ? new Date(s.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+      return `<div class="signal">
+        <div class="qui">${esc(s.student_name || s.student_code)} · ${esc(s.cours_code || "")}${s.etape ? " · étape " + esc(s.etape) : ""}${s.niveau ? " · " + esc(NIV_LIBELLE[s.niveau] || s.niveau) : ""}${date ? " · " + esc(date) : ""}</div>
+        <div><strong>${esc(s.motif || "Signalement")}</strong>${s.commentaire ? " — " + esc(s.commentaire) : ""}</div>
+        <blockquote>${esc(s.message_prof)}</blockquote>
+      </div>`;
+    }).join("");
+    $("sigStatus").textContent = rows.length ? "" : "Aucune réponse signalée pour l'instant.";
+  } catch (e) {
+    $("sigStatus").textContent = e.message || "Impossible de charger les signalements.";
+    $("sigStatus").classList.add("err");
+  }
+}
+
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;
   $("loginError").textContent = "";
@@ -285,6 +412,8 @@ $("loginBtn").onclick = async () => {
     $("screenLogin").classList.add("hidden");
     $("app").classList.remove("hidden");
     loadDashboard();
+    loadRevisions();
+    loadSignalements();
     loadStudents();
     loadCompetencesSelect().then(loadCurrentFocus);
     loadPositionnements();

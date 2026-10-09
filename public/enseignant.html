@@ -92,6 +92,43 @@
   .signal { border: 1px solid var(--line); border-left: 4px solid var(--ko); border-radius: 10px; padding: 10px 12px; font-size: .92rem; display: grid; gap: 4px; }
   .signal .qui { color: var(--muted); font-size: .82rem; }
   .signal blockquote { margin: 2px 0; padding: 6px 10px; background: color-mix(in srgb, var(--muted) 10%, transparent); border-radius: 8px; max-height: 150px; overflow: auto; white-space: pre-wrap; }
+
+  button.secondary { background: transparent; color: var(--accent); border: 2px solid var(--accent); padding: 9px 18px; }
+  .barre { display: flex; flex-wrap: wrap; gap: 8px; }
+  select, input[type="date"] { font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--ink); max-width: 100%; }
+  h3.sous { margin: 6px 0 0; font-family: "Poppins", sans-serif; font-weight: 700; font-size: 1rem; }
+  .matrice-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  table.matrice { border-collapse: collapse; font-size: .85rem; min-width: 100%; }
+  table.matrice th, table.matrice td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+  table.matrice th:first-child, table.matrice td:first-child { text-align: left; position: sticky; left: 0; background: var(--card); font-weight: 700; }
+  table.matrice th small { display: block; color: var(--muted); font-weight: 400; }
+  .case { display: inline-block; min-width: 34px; padding: 3px 6px; border-radius: 8px; font-weight: 800; }
+  .case.n-Novice { background: #f6c9c5; color: #7a1a13; }
+  .case.n-Débrouillé { background: #fbe0a8; color: #6b4600; }
+  .case.n-Averti { background: #cfdcf7; color: #1d3f8a; }
+  .case.n-Expert { background: #c4ecd0; color: #14572b; }
+  .case.n-fini { background: #e4e0f5; color: #3d2a8a; }
+  .case.n-cours { border: 2px dashed #9a6b00; color: #9a6b00; }
+  .case.n-vide { color: var(--muted); font-weight: 400; }
+  .legende { display: flex; flex-wrap: wrap; gap: 10px; font-size: .82rem; color: var(--muted); align-items: center; }
+  .relance { display: grid; gap: 6px; }
+  .relance div { border: 1px solid var(--line); border-left: 4px solid #9a6b00; border-radius: 10px; padding: 8px 12px; font-size: .92rem; }
+  .relance div.rouge { border-left-color: var(--ko); }
+  .relance small { color: var(--muted); display: block; }
+  .theme { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .93rem; }
+  .theme strong { display: block; }
+  .jauge { height: 10px; background: color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 999px; overflow: hidden; }
+  .jauge > span { display: block; height: 100%; background: var(--accent); }
+  .comp { display: grid; gap: 4px; font-size: .92rem; }
+  .assign { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: .92rem; }
+  .assign button { padding: 6px 12px; font-size: .8rem; }
+  @media print {
+    body.imprime-suivi .card:not(.imprimable), body.imprime-suivi .band, body.imprime-suivi button, body.imprime-suivi select, body.imprime-suivi label, body.imprime-suivi .no-print { display: none !important; }
+    body.imprime-suivi { background: #fff; color: #000; font-size: 12px; }
+    body.imprime-suivi .card { border: 0; padding: 0; }
+    body.imprime-suivi .matrice-wrap { overflow: visible; }
+    body.imprime-suivi #titreImpression { display: block !important; }
+  }
 </style>
 </head>
 <body>
@@ -116,6 +153,54 @@
       <p style="margin:0; color:var(--muted); font-size:.92rem;">Les élèves à surveiller apparaissent en premier.</p>
       <p id="dashStatus" class="status">Chargement…</p>
       <div id="dashGrid" class="dash-grid hidden"></div>
+    </div>
+
+    <div class="card imprimable" id="suiviCard">
+      <h2 style="margin:0;">Suivi de la classe</h2>
+      <h3 id="titreImpression" class="hidden" style="margin:0;"></h3>
+      <label for="classeSelect">Classe</label>
+      <select id="classeSelect"></select>
+      <div class="barre no-print">
+        <button id="exportCsvBtn" class="secondary" type="button">Exporter pour Excel</button>
+        <button id="printBtn" class="secondary" type="button">Imprimer / PDF</button>
+      </div>
+      <p id="suiviStatus" class="status">Chargement…</p>
+
+      <h3 class="sous">Avancement par cours</h3>
+      <div class="legende">
+        <span><span class="case n-Novice">N</span> Novice</span>
+        <span><span class="case n-Débrouillé">D</span> Débrouillé</span>
+        <span><span class="case n-Averti">A</span> Averti</span>
+        <span><span class="case n-Expert">E</span> Expert</span>
+        <span><span class="case n-cours">…</span> en cours</span>
+      </div>
+      <div class="matrice-wrap"><table class="matrice" id="matrice"></table></div>
+      <p id="matriceNote" style="margin:0; color:var(--muted); font-size:.85rem;"></p>
+
+      <h3 class="sous">Avancement par compétence</h3>
+      <div id="parCompetence" class="comp"></div>
+
+      <h3 class="sous">À relancer</h3>
+      <div id="aRelancer" class="relance"></div>
+    </div>
+
+    <div class="card" id="pointsCard">
+      <h2 style="margin:0;">Points communs de la classe</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Analyse des « points à travailler » des bilans terminés, regroupés par thèmes, avec une suggestion de reprise en cours.</p>
+      <div><button id="syntheseBtn" type="button">Analyser les bilans</button></div>
+      <div id="syntheseOut" style="display:grid; gap:8px;"></div>
+    </div>
+
+    <div class="card" id="assignCard">
+      <h2 style="margin:0;">Cours à faire</h2>
+      <p style="margin:0; color:var(--muted); font-size:.92rem;">Choisis un cours pour la classe sélectionnée : il apparaît chez les élèves avec la mention « À faire ».</p>
+      <label for="assignCours">Cours</label>
+      <select id="assignCours"></select>
+      <label for="assignDate">Date limite (facultatif)</label>
+      <input id="assignDate" type="date">
+      <div><button id="assignBtn" type="button">Assigner à la classe</button></div>
+      <p id="assignStatus" class="status"></p>
+      <div id="assignList" style="display:grid; gap:8px;"></div>
     </div>
 
     <div class="card">
@@ -404,6 +489,183 @@ async function loadSignalements() {
   }
 }
 
+/* ---------- Suivi de la classe ---------- */
+let D = { eleves: [], sessions: [], cours: [], assignes: [] };
+const NIVEAUX_LETTRE = { Novice: "N", "Débrouillé": "D", Averti: "A", Expert: "E" };
+
+function classeCourante() { return $("classeSelect").value; }
+function elevesDeLaClasse() {
+  const c = classeCourante();
+  return D.eleves.filter(e => e.active !== false && (c === "" || (c === "__none__" ? !e.classe : e.classe === c)));
+}
+function nomClasse() {
+  const c = classeCourante();
+  return c === "" ? "Toutes les classes" : c === "__none__" ? "Sans classe" : c;
+}
+function sessionDe(code, coursCode) { return D.sessions.find(s => s.student_code === code && s.cours_code === coursCode); }
+function coursDispo() { return D.cours.filter(c => c.disponible); }
+function dateFr(d) { return d ? new Date(d).toLocaleDateString("fr-FR") : ""; }
+
+function caseCours(s) {
+  if (!s) return '<span class="case n-vide">—</span>';
+  if (s.statut !== "termine") return '<span class="case n-cours" title="En cours">…</span>';
+  const n = s.niveau_atteint;
+  if (!n) return '<span class="case n-fini" title="Terminé">✓</span>';
+  return `<span class="case n-${n}" title="${esc(n)}">${NIVEAUX_LETTRE[n] || "✓"}</span>`;
+}
+
+async function loadSuivi() {
+  $("suiviStatus").textContent = "Chargement…";
+  $("suiviStatus").classList.remove("err");
+  try {
+    const [eleves, sessions, cat, assignes] = await Promise.all([
+      api("/api/teacher/students"),
+      api("/api/teacher/cours-sessions"),
+      fetch("/cours-catalogue.json").then(r => r.json()).catch(() => []),
+      api("/api/teacher/cours-assignes").catch(() => [])
+    ]);
+    D = { eleves, sessions, cours: Array.isArray(cat) ? cat : [], assignes };
+    const classes = [...new Set(eleves.filter(e => e.active !== false && e.classe).map(e => e.classe))].sort((a, b) => a.localeCompare(b));
+    const avant = classeCourante();
+    const sansClasse = eleves.some(e => e.active !== false && !e.classe);
+    $("classeSelect").innerHTML = '<option value="">Toutes les classes</option>' +
+      classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("") +
+      (sansClasse ? '<option value="__none__">Sans classe</option>' : "");
+    if ([...$("classeSelect").options].some(o => o.value === avant)) $("classeSelect").value = avant;
+    $("assignCours").innerHTML = coursDispo().map(c => `<option value="${esc(c.code)}">${esc(c.titre)}</option>`).join("");
+    $("suiviStatus").textContent = "";
+    rendreSuivi();
+  } catch (e) {
+    $("suiviStatus").textContent = e.message || "Impossible de charger le suivi.";
+    $("suiviStatus").classList.add("err");
+  }
+}
+
+function rendreSuivi() {
+  const eleves = elevesDeLaClasse().sort((a, b) => a.nom.localeCompare(b.nom));
+  const cours = coursDispo();
+  $("titreImpression").textContent = "VocalSales — " + nomClasse() + " — " + new Date().toLocaleDateString("fr-FR");
+
+  // matrice
+  $("matrice").innerHTML = "<thead><tr><th>Élève</th>" +
+    cours.map(c => `<th>${esc(c.titre)}<small>${esc(c.competence || c.epreuve)}</small></th>`).join("") +
+    "</tr></thead><tbody>" +
+    eleves.map(e => `<tr><td>${esc(e.nom)}</td>${cours.map(c => `<td>${caseCours(sessionDe(e.code, c.code))}</td>`).join("")}</tr>`).join("") +
+    "</tbody>";
+  const aVenir = D.cours.length - cours.length;
+  $("matriceNote").textContent = (eleves.length ? "" : "Aucun élève dans cette sélection. ") +
+    (aVenir > 0 ? aVenir + " autre" + (aVenir > 1 ? "s" : "") + " cours du référentiel arrivent prochainement." : "");
+
+  // compétences
+  $("parCompetence").innerHTML = cours.map(c => {
+    const codes = new Set(eleves.map(e => e.code));
+    const sess = D.sessions.filter(s => s.cours_code === c.code && codes.has(s.student_code));
+    const finis = sess.filter(s => s.statut === "termine").length;
+    const hauts = sess.filter(s => s.niveau_atteint === "Averti" || s.niveau_atteint === "Expert").length;
+    const pct = eleves.length ? Math.round(100 * finis / eleves.length) : 0;
+    return `<div><strong>${esc(c.competence ? c.competence + " — " : "")}${esc(c.titre)}</strong> (${esc(c.epreuve)})
+      <div class="jauge"><span style="width:${pct}%"></span></div>
+      ${finis}/${eleves.length} élève${eleves.length > 1 ? "s" : ""} ont terminé · ${hauts} au niveau Averti ou Expert</div>`;
+  }).join("") || "Aucun cours disponible.";
+
+  // à relancer
+  const maintenant = Date.now();
+  const lignes = [];
+  for (const e of eleves) {
+    const mes = D.sessions.filter(s => s.student_code === e.code);
+    const dernier = mes.map(s => new Date(s.updated_at).getTime()).filter(Boolean).sort((a, b) => b - a)[0];
+    const novice = mes.filter(s => s.niveau_atteint === "Novice");
+    if (novice.length) lignes.push({ rouge: true, nom: e.nom, txt: "Niveau Novice : à accompagner", sub: novice.map(s => (D.cours.find(c => c.code === s.cours_code) || {}).titre || s.cours_code).join(", ") });
+    if (!mes.length) lignes.push({ nom: e.nom, txt: "Aucune révision commencée", sub: "" });
+    else if (maintenant - dernier > 14 * 86400000) lignes.push({ nom: e.nom, txt: "Pas de séance depuis " + Math.floor((maintenant - dernier) / 86400000) + " jours", sub: "Dernière : " + dateFr(dernier) });
+  }
+  lignes.sort((a, b) => (b.rouge ? 1 : 0) - (a.rouge ? 1 : 0));
+  $("aRelancer").innerHTML = lignes.map(l => `<div class="${l.rouge ? "rouge" : ""}"><strong>${esc(l.nom)}</strong> — ${esc(l.txt)}${l.sub ? "<small>" + esc(l.sub) + "</small>" : ""}</div>`).join("") ||
+    (eleves.length ? "Personne à relancer pour le moment." : "");
+
+  rendreAssignations();
+}
+
+function rendreAssignations() {
+  const c = classeCourante();
+  const specifique = c !== "" && c !== "__none__";
+  $("assignBtn").disabled = !specifique;
+  $("assignStatus").textContent = specifique ? "" : "Choisis une classe précise pour assigner un cours.";
+  $("assignStatus").classList.remove("err");
+  const liste = D.assignes.filter(a => specifique ? a.classe === c : true);
+  $("assignList").innerHTML = liste.map(a => {
+    const cours = D.cours.find(x => x.code === a.cours_code);
+    return `<div class="assign"><span><strong>${esc(a.classe)}</strong> — ${esc(cours ? cours.titre : a.cours_code)}${a.date_limite ? " · avant le " + esc(dateFr(a.date_limite)) : ""}</span>
+      <button type="button" class="secondary" data-classe="${esc(a.classe)}" data-cours="${esc(a.cours_code)}">Retirer</button></div>`;
+  }).join("");
+}
+
+$("classeSelect").onchange = rendreSuivi;
+
+$("assignBtn").onclick = async () => {
+  $("assignStatus").classList.remove("err");
+  $("assignBtn").disabled = true;
+  try {
+    await api("/api/teacher/cours-assignes", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ classe: classeCourante(), cours_code: $("assignCours").value, date_limite: $("assignDate").value || null }) });
+    D.assignes = await api("/api/teacher/cours-assignes").catch(() => D.assignes);
+    rendreAssignations();
+    $("assignStatus").textContent = "Cours assigné à la classe.";
+  } catch (e) {
+    $("assignStatus").textContent = e.message || "Erreur.";
+    $("assignStatus").classList.add("err");
+  } finally { $("assignBtn").disabled = classeCourante() === "" || classeCourante() === "__none__"; }
+};
+$("assignList").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button[data-cours]");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    await api("/api/teacher/cours-assignes", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ classe: b.dataset.classe, cours_code: b.dataset.cours, supprimer: true }) });
+    D.assignes = await api("/api/teacher/cours-assignes").catch(() => []);
+    rendreAssignations();
+  } catch (e) { b.disabled = false; $("assignStatus").textContent = e.message || "Erreur."; $("assignStatus").classList.add("err"); }
+});
+
+$("syntheseBtn").onclick = async () => {
+  $("syntheseBtn").disabled = true;
+  $("syntheseOut").innerHTML = '<span class="status">Analyse en cours…</span>';
+  try {
+    const classe = classeCourante() === "__none__" ? "" : classeCourante();
+    const r = await api("/api/teacher/synthese-classe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classe }) });
+    $("syntheseOut").innerHTML = r.themes.length
+      ? r.themes.map(t => `<div class="theme"><strong>${esc(t.theme)}</strong>${t.nb ? esc(t.nb) + " point(s) relevé(s). " : ""}${esc(t.reprise)}</div>`).join("") +
+        `<span style="color:var(--muted); font-size:.82rem;">Analyse de ${esc(r.nb_points)} points relevés. Résultat généré par une IA, à vérifier.</span>`
+      : `<span class="status">${esc(r.message || "Aucun thème commun pour le moment.")}</span>`;
+  } catch (e) {
+    $("syntheseOut").innerHTML = `<span class="status err">${esc(e.message || "Erreur.")}</span>`;
+  } finally { $("syntheseBtn").disabled = false; }
+};
+
+$("exportCsvBtn").onclick = () => {
+  const cours = coursDispo();
+  const cell = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const lignes = [["Élève", "Classe", ...cours.map(c => c.titre)].map(cell).join(";")];
+  for (const e of elevesDeLaClasse().sort((a, b) => a.nom.localeCompare(b.nom))) {
+    lignes.push([e.nom, e.classe || "", ...cours.map(c => {
+      const s = sessionDe(e.code, c.code);
+      if (!s) return "";
+      return (s.statut === "termine" ? (s.niveau_atteint || "Terminé") : "En cours") + " (" + dateFr(s.updated_at) + ")";
+    })].map(cell).join(";"));
+  }
+  const blob = new Blob(["\ufeff" + lignes.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "vocalsales-suivi-" + nomClasse().replace(/[^\w-]+/g, "_") + "-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$("printBtn").onclick = () => {
+  document.body.classList.add("imprime-suivi");
+  window.print();
+  setTimeout(() => document.body.classList.remove("imprime-suivi"), 500);
+};
+
 $("loginBtn").onclick = async () => {
   password = $("pwInput").value;
   $("loginError").textContent = "";
@@ -412,6 +674,7 @@ $("loginBtn").onclick = async () => {
     $("screenLogin").classList.add("hidden");
     $("app").classList.remove("hidden");
     loadDashboard();
+    loadSuivi();
     loadRevisions();
     loadSignalements();
     loadStudents();

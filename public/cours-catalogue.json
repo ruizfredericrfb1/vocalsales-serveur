@@ -34,7 +34,8 @@
       "une question sur la composition ou l'origine d'un produit que la fiche produit ne précise pas",
       "une information transmise à l'oral par un collègue, que le vendeur n'a pas pu vérifier",
       "une demande de conseil sur une tendance du moment dans le secteur"
-    ]
+    ],
+    "competence": "C1.1"
   },
   {
     "code": "C1-VENTE",
@@ -43,7 +44,8 @@
     "bloc_libelle": "Conseiller et vendre",
     "epreuve": "E31",
     "ordre": 2,
-    "disponible": false
+    "disponible": false,
+    "competence": "C1.2"
   },
   {
     "code": "C1-EXECUTION",
@@ -52,7 +54,8 @@
     "bloc_libelle": "Conseiller et vendre",
     "epreuve": "E31",
     "ordre": 3,
-    "disponible": false
+    "disponible": false,
+    "competence": "C1.3"
   },
   {
     "code": "C2-COMMANDE",
@@ -61,7 +64,8 @@
     "bloc_libelle": "Suivre les ventes",
     "epreuve": "E32",
     "ordre": 4,
-    "disponible": false
+    "disponible": false,
+    "competence": "C2.1"
   },
   {
     "code": "C2-SERVICES",
@@ -70,7 +74,8 @@
     "bloc_libelle": "Suivre les ventes",
     "epreuve": "E32",
     "ordre": 5,
-    "disponible": false
+    "disponible": false,
+    "competence": "C2.2"
   },
   {
     "code": "C2-RETOURS",
@@ -79,7 +84,8 @@
     "bloc_libelle": "Suivre les ventes",
     "epreuve": "E32",
     "ordre": 6,
-    "disponible": false
+    "disponible": false,
+    "competence": "C2.3"
   },
   {
     "code": "C2-SATISFACTION",
@@ -88,7 +94,8 @@
     "bloc_libelle": "Suivre les ventes",
     "epreuve": "E32",
     "ordre": 7,
-    "disponible": false
+    "disponible": false,
+    "competence": "C2.4"
   },
   {
     "code": "C3-INFO",

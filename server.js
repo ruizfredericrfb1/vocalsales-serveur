@@ -229,7 +229,7 @@ async function lookupStudent(code, { activeOnly = true } = {}) {
   try {
     const filter = activeOnly ? "&active=eq.true" : "";
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}${filter}&select=code,nom,active,option_choice`,
+      `${SUPABASE_URL}/rest/v1/students?code=eq.${encodeURIComponent(code)}${filter}&select=code,nom,active,option_choice,classe`,
       { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } }
     );
     if (!r.ok) {
@@ -253,6 +253,7 @@ async function requireStudent(req, res, next) {
     req.studentCode = code;
     req.studentName = found.student.nom;
     req.studentOption = found.student.option_choice || null;
+    req.studentClasse = found.student.classe || null;
     return next();
   }
   if (found.status === "absent") {
@@ -951,8 +952,11 @@ app.get("/api/cours/catalogue", requireStudent, async (req, res) => {
     if (!sessionParCours[s.cours_code]) sessionParCours[s.cours_code] = s;
   }
 
+  const assignes = await coursAssignesPourClasse(req.studentClasse);
   const enrichi = catalogue.map(c => ({
     ...c,
+    assigne: Boolean(assignes[c.code]),
+    date_limite: assignes[c.code] ? assignes[c.code].date_limite || null : null,
     statut: sessionParCours[c.code] ? sessionParCours[c.code].statut : null,
     niveau: sessionParCours[c.code] ? sessionParCours[c.code].niveau : null,
     etape: sessionParCours[c.code] ? sessionParCours[c.code].etape_atteinte : null
@@ -1741,6 +1745,88 @@ app.get("/api/teacher/cours-sessions", async (req, res) => {
     res.json(Array.isArray(rows) ? rows : []);
   } catch (e) {
     res.status(502).json({ error: "supabase_erreur", message: "Impossible de charger le suivi des cours." });
+  }
+});
+
+/* ---------- Cours assignés à une classe ---------- */
+
+async function coursAssignesPourClasse(classe) {
+  const out = {};
+  if (!supabaseConfigured() || !classe) return out;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cours_assignes?classe=eq.${encodeURIComponent(classe)}&select=cours_code,date_limite`, { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } });
+    if (!r.ok) return out;
+    const rows = await r.json();
+    for (const a of Array.isArray(rows) ? rows : []) out[a.cours_code] = a;
+  } catch (e) { /* table absente : pas d'assignation */ }
+  return out;
+}
+
+app.get("/api/teacher/cours-assignes", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.json([]);
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/cours_assignes?select=classe,cours_code,date_limite,created_at&order=created_at.desc&limit=200`, { headers: { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` } });
+    const rows = r.ok ? await r.json() : [];
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (e) { res.json([]); }
+});
+
+app.post("/api/teacher/cours-assignes", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base non configurée." });
+  const classe = String(req.body.classe || "").trim().slice(0, 80);
+  const coursCode = String(req.body.cours_code || "").trim().slice(0, 40);
+  const supprimer = Boolean(req.body.supprimer);
+  const limite = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date_limite || "")) ? String(req.body.date_limite) : null;
+  if (!classe || !trouverCours(coursCode)) return res.status(400).json({ error: "requete_invalide", message: "Classe ou cours invalide." });
+  const headers = { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}`, "content-type": "application/json" };
+  try {
+    const filtre = `classe=eq.${encodeURIComponent(classe)}&cours_code=eq.${encodeURIComponent(coursCode)}`;
+    await fetch(`${SUPABASE_URL}/rest/v1/cours_assignes?${filtre}`, { method: "DELETE", headers });
+    if (!supprimer) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/cours_assignes`, { method: "POST", headers: { ...headers, "prefer": "return=minimal" }, body: JSON.stringify({ classe, cours_code: coursCode, date_limite: limite }) });
+      if (!r.ok) return res.status(502).json({ error: "supabase_erreur", message: "Enregistrement impossible : la table « cours_assignes » est-elle créée dans Supabase ?" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(502).json({ error: "supabase_erreur", message: "Enregistrement impossible pour le moment." });
+  }
+});
+
+/* ---------- Synthèse des points à travailler d'une classe ---------- */
+
+app.post("/api/teacher/synthese-classe", async (req, res) => {
+  if (!checkTeacherPassword(req, res)) return;
+  if (!supabaseConfigured()) return res.status(503).json({ error: "supabase_non_configure", message: "Base non configurée." });
+  const classe = String(req.body.classe || "").trim();
+  const headers = { "apikey": SUPABASE_SECRET_KEY, "authorization": `Bearer ${SUPABASE_SECRET_KEY}` };
+  try {
+    const rs = await fetch(`${SUPABASE_URL}/rest/v1/students?active=eq.true&select=code,classe`, { headers });
+    const eleves = (await rs.json()) || [];
+    const codes = new Set(eleves.filter(e => !classe || (e.classe || "") === classe).map(e => e.code));
+    const rc = await fetch(`${SUPABASE_URL}/rest/v1/cours_sessions?statut=eq.termine&select=student_code,cours_code,bilan&limit=500`, { headers });
+    const sessions = rc.ok ? await rc.json() : [];
+    const points = [];
+    for (const s of Array.isArray(sessions) ? sessions : []) {
+      if (!codes.has(s.student_code) || !s.bilan) continue;
+      const lst = Array.isArray(s.bilan.points_a_travailler) ? s.bilan.points_a_travailler : [];
+      lst.forEach(p => { if (String(p || "").trim()) points.push(String(p).trim().slice(0, 300)); });
+    }
+    if (points.length < 2) return res.json({ themes: [], nb_points: points.length, message: "Pas assez de bilans terminés pour dégager des points communs." });
+    const messages = [{ role: "user", content:
+      "Voici les points à travailler relevés dans les bilans de révision d'élèves de lycée professionnel (une ligne par point) :\n" +
+      points.slice(0, 80).map((p, i) => `${i + 1}. ${p}`).join("\n") +
+      "\n\nRegroupe-les en 2 à 5 thèmes communs. Pour chaque thème, donne un intitulé court, le nombre de points concernés et une suggestion de reprise en classe en une phrase. Écris en français soigné, sans expression familière. " +
+      "Réponds uniquement avec un objet JSON valide : {\"themes\":[{\"theme\":\"...\",\"nb\":3,\"reprise\":\"...\"}]}" }];
+    const texte = await callClaude(messages, 800);
+    const p = extractJson(texte);
+    const themes = (p && Array.isArray(p.themes) ? p.themes : []).slice(0, 5).map(t => ({
+      theme: String(t.theme || "").slice(0, 120), nb: parseInt(t.nb, 10) || 0, reprise: String(t.reprise || "").slice(0, 300)
+    })).filter(t => t.theme);
+    res.json({ themes, nb_points: points.length });
+  } catch (e) {
+    res.status(502).json({ error: "erreur", message: "L'analyse n'a pas pu être faite pour le moment. Réessaie dans un instant." });
   }
 });
 

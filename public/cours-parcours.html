@@ -113,6 +113,7 @@
   .replique-ia .question .etiquette { grid-column: 2; font-family: "Poppins", sans-serif; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent2); margin: 0; }
   .replique-ia .question p { grid-column: 2; margin: 0; font-weight: 700; color: var(--ink); line-height: 1.55; }
   .replique-ia .question .pastille-q { grid-row: 1 / span 2; }
+  .replique-ia .question .questions-multiples { grid-column: 2; margin: 0; padding-left: 1.3rem; display: grid; gap: 8px; font-weight: 700; color: var(--ink); line-height: 1.55; }
   .replique-eleve {
     background: var(--accent); color: var(--accent-ink); border-radius: 14px;
     padding: 12px 16px; font-size: 1rem; border-bottom-right-radius: 4px;
@@ -657,6 +658,19 @@ function blocEssentiel(e) {
 // Présentation visuelle seulement : le texte lu à voix haute reste inchangé.
 function structurerReplique(texte) {
   const brut = String(texte || "").trim().replace(/ ([?!:;»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+  // Cas à plusieurs questions numérotées (« 1) … ») : situation, consigne, puis liste de questions
+  const lignes = brut.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const debutListe = lignes.findIndex(l => /^\d\)\s/.test(l));
+  if (debutListe > 0) {
+    const items = lignes.slice(debutListe).filter(l => /^\d\)\s/.test(l)).map(l => l.replace(/^\d\)\s*/, ""));
+    const intro = lignes[debutListe - 1];
+    const ctx = lignes.slice(0, debutListe - 1).join(" ").split(/(?<=[.!?…])\s+/).filter(Boolean);
+    const paras = [];
+    for (let i = 0; i < ctx.length; i += 2) paras.push(ctx.slice(i, i + 2).join(" "));
+    let sortie = '<div class="contexte">' + paras.map(p => "<p>" + escapeHtml(p) + "</p>").join("") + "</div>";
+    sortie += '<hr class="separe"><div class="question"><span class="pastille-q" aria-hidden="true">?</span><p class="etiquette">À toi</p><p>' + escapeHtml(intro) + '</p><ol class="questions-multiples">' + items.map(q => "<li>" + escapeHtml(q) + "</li>").join("") + "</ol></div>";
+    return sortie;
+  }
   const phrases = brut.split(/\n+/).filter(Boolean).flatMap(par => par.split(/(?<=[.!?…])\s+/)).filter(Boolean);
   let iq = -1;
   phrases.forEach((ph, i) => { if (/\?\s*$/.test(ph)) iq = i; });

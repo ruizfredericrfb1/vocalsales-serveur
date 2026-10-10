@@ -1321,7 +1321,7 @@ ${blocComplexite}
 Quand l'élève a répondu (compteur >= 1) : évalue sa réponse UNE SEULE FOIS.
 - Dis ce qui est réussi, en citant ses mots.
 - Dis ce qui manque ou est faux, et propose la bonne formulation.
-- Reste dans la longueur d'une réplique orale courte (6 phrases au maximum).
+- Reste dans la longueur d'une réplique orale courte (6 phrases au maximum). Si le cas comportait plusieurs questions numérotées, commente chaque partie en une phrase (réussite ou point à reprendre), en t'appuyant sur les éléments attendus : 9 phrases au maximum.
 - Termine par une phrase de transition du type « Merci pour ta réponse : je prépare ton bilan. ». Pas de question.
 - etat : "etape_suivante".`,
 
@@ -1505,7 +1505,7 @@ function chargerBanque() {
 function listeBanque(coursCode, cleNv) {
   const b = chargerBanque()[coursCode];
   const l = b && b[cleNv];
-  return Array.isArray(l) ? l.filter(x => x && x.situation && x.question && Array.isArray(x.observation) && x.observation.length === 3 && x.consigne) : [];
+  return Array.isArray(l) ? l.filter(x => x && x.situation && x.question && Array.isArray(x.observation) && x.observation.length === 3 && (x.consigne || (Array.isArray(x.consignes) && x.consignes.length))) : [];
 }
 function trouverSituation(coursCode, cleNv, id) {
   if (!id) return null;
@@ -1927,7 +1927,15 @@ app.post("/api/cours/turn", requireStudent, async (req, res) => {
       if (it) fixe = { replique: it.situation + " " + it.question, contexte: contexteDeSituation(it) };
     } else if (!message && etape === 6) {
       const it = tirerSituation(coursCode, cleNv, itemContexte && itemContexte.id, itemContexte && itemContexte.secteur);
-      if (it) fixe = { replique: it.situation + " " + it.consigne, contexte: contexteDeSituation(it) };
+      if (it) {
+        const parties = Array.isArray(it.consignes) && it.consignes.length ? it.consignes : null;
+        fixe = {
+          replique: parties
+            ? it.situation + "\nRéponds par écrit à chacune des questions suivantes.\n" + parties.map((q, i) => (i + 1) + ") " + q).join("\n")
+            : it.situation + " " + it.consigne,
+          contexte: contexteDeSituation(it)
+        };
+      }
     } else if (etape === 2 && itemContexte && nb !== undefined && nb < 3) {
       if (!message) fixe = { replique: "Revenons à la situation " + (/^[aeiouyàâéèêëîïôûhAEIOUYÀÂÉÈÊËÎÏÔÛH]/.test(itemContexte.prenom) ? "d'" : "de ") + itemContexte.prenom + ". " + itemContexte.observation[0] };
       else opts.reaction = true;
